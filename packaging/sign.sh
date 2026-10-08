@@ -27,6 +27,16 @@ if [ -d "$APP/Contents/Resources/helpers" ]; then
     echo "sign: helper $(basename "$helper")"
   done
 fi
+# 1b. Native Node modules shipped outside the asar (better-sqlite3, SQLITE-ABI.md).
+#     Hardened runtime loads them because they carry our own Developer ID; no
+#     extra entitlement is needed (disable-library-validation is already set for
+#     Electron itself). Notarization requires every Mach-O in the bundle signed.
+if [ -d "$APP/Contents/Resources/native" ]; then
+  find "$APP/Contents/Resources/native" -name '*.node' -type f | while read -r addon; do
+    codesign --force --options runtime --timestamp --sign "$IDENTITY" "$addon"
+    echo "sign: native module $(basename "$addon")"
+  done
+fi
 # 2. Electron frameworks and helper apps (inner to outer).
 find "$APP/Contents/Frameworks" -depth \( -name '*.framework' -o -name '*.app' -o -name '*.dylib' \) | while read -r item; do
   case "$item" in

@@ -2,12 +2,15 @@
 //   helpers/ocr   the Vision OCR helper, from packages/recognition/ocr (lane C's
 //                 prebuilt binary when present, else compiled here with swiftc)
 //   renderer/     lane F's built renderer (apps/desktop/renderer/dist) when present
+//   native/       better-sqlite3 rebuilt for Electron's ABI by rebuild-native.mjs;
+//                 required, the build fails without it
 // Writes manifest.json saying what went in. Never fails the build for a missing
-// optional input; the manifest and SPIKE.md record the gap.
+// optional input (helper, renderer); the manifest and SPIKE.md record the gap.
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rebuildNative } from './rebuild-native.mjs';
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const project = join(repo, 'apps', 'desktop', 'main');
@@ -15,7 +18,10 @@ const out = join(project, 'build', 'resources');
 rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, 'helpers'), { recursive: true });
 
-const manifest = { preparedAt: new Date().toISOString(), helpers: {}, renderer: 'placeholder' };
+const manifest = { preparedAt: new Date().toISOString(), helpers: {}, renderer: 'placeholder', native: null };
+
+// Native modules (SQLITE-ABI.md): rebuilt against Electron, verified inside Electron, shipped outside the asar.
+manifest.native = rebuildNative();
 
 // OCR helper
 const ocrDir = join(repo, 'packages', 'recognition', 'ocr');

@@ -9,8 +9,10 @@ directories:
   output: ../../../packaging/dist
   buildResources: ../../../packaging/resources
 # The main process and preload are bundled by build.mjs, so no node_modules ship.
+# migrations/ is the ledger's SQL (copied from packages/ledger/migrations by build.mjs).
 files:
   - dist/**
+  - migrations/**
   - renderer-placeholder/**
   - package.json
   - "!**/node_modules/**"
@@ -23,6 +25,11 @@ extraResources:
   - from: build/resources
     to: .
 asar: true
+# Native modules are not left to electron-builder: packaging/rebuild-native.mjs
+# (called from prepare.mjs) rebuilds better-sqlite3 against Electron's ABI into
+# build/resources/native, verified inside Electron, and extraResources ships it
+# at Contents/Resources/native (a node_modules/ path would be dropped by the
+# file matcher). See SQLITE-ABI.md.
 npmRebuild: false
 nodeGypRebuild: false
 mac:
