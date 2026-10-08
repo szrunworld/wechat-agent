@@ -28,3 +28,29 @@
 - 完成后开 **draft PR** 到 `app-skeleton`，不要合并；PR 描述列：改了哪些文件、跑了什么命令和结果、T 用例状态、未完成项、INTERFACE REQUEST。
 - 别碰别的 lane 的目录，哪怕只是"顺手修一下"。
 
+
+## 进度（2026-10-08，lane G）
+
+交付 1–7 全部有代码与脚本；详情见 `packaging/SPIKE.md` 与 `packaging/README.md`。
+
+| 交付 | 状态 | 在哪 |
+| --- | --- | --- |
+| 1 主进程安全设置 + preload 白名单 | 完成 | `apps/desktop/main/src/{main,preload,bridge,channels,gateway}.ts`；`test/whitelist.test.ts`、`test/gateway.test.ts` |
+| 2 挂 `ApplicationService`（Fake） | 完成 | `main.ts createService()`，`WECHAT_AGENT_FAKE_SNAPSHOT` 选初始状态 |
+| 3 窗口生命周期 / 显式退出 / 单实例 | 完成 | `lifecycle.ts`、`quit.ts`（8 条单测）、`main.ts Shell` |
+| 4 菜单栏 | 完成 | `status.ts` + `main.ts refreshTray()` |
+| 5 打包 / helper / 签名 / SBOM / 升级 / 卸载 | 完成（签名公证脚本因无证书只走了 SKIP 路径） | `packaging/*` |
+| 6 spike 报告 | 完成，结论**通过** | `packaging/SPIKE.md` |
+| 7 无 2ndscreen | 完成 | `verify-install.sh` 断言 + `scripts/check-bans.sh` |
+
+完成条件：`npm run package -w apps/desktop/main` 产出 `packaging/dist/mac-arm64/WeChat Agent.app`（288 MB）并显示 Fake 快照的占位页（lane F 未就绪）；`packaging/verify-install.sh` 24/24；preload 只暴露两个方法、非白名单拒绝有单测（22 条 node:test 全绿）。
+
+T 用例：T41（安装/升级/卸载）脚本化在 `packaging/verify-install.sh`，本机执行 **passed**（24 断言）；记录文件归 lane H，这里只报执行事实。
+
+未完成 / 待协调者：
+- Developer ID 签名与公证没有真证书，只验证了跳过路径。
+- App 图标未做（electron-builder 用默认 Electron 图标，`packaging/resources/` 留空）。
+- 根 `package-lock.json` 因在 `apps/desktop/main` 装 electron/electron-builder/esbuild 而变化，按所有权规则**没有提交**；合并时请协调者在骨架分支 `npm install` 重新生成。
+- 只打 arm64；x64/universal 未配。
+
+INTERFACE REQUEST: `@wechat-agent/ports/fakes` 的 `FakeApplicationService` 需要实现 `app.pause` / `app.resume`（切换 `inputGate` 为 `closed` / `open` 并推送快照），目前抛 `unavailable`，导致壳的退出流程和托盘暂停在 Fake 上只能走到 `pause_failed` 分支（原因：lane G/F 无法在 lane E 就绪前演练"暂停后退出"的正常路径；壳的测试用自己的脚本化服务覆盖了，但集成前的手工演示走不通）。

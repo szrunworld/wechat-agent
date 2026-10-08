@@ -1,0 +1,56 @@
+# electron-builder configuration for the WeChat Agent shell (lane G).
+# Run from apps/desktop/main: `npm run package` (unpacked .app) or `npm run package:dmg`.
+# All relative paths resolve against apps/desktop/main (the project dir).
+appId: com.wechat-agent.desktop
+productName: WeChat Agent
+copyright: WeChat Agent contributors
+electronVersion: 44.7.0
+directories:
+  output: ../../../packaging/dist
+  buildResources: ../../../packaging/resources
+# The main process and preload are bundled by build.mjs, so no node_modules ship.
+files:
+  - dist/**
+  - renderer-placeholder/**
+  - package.json
+  - "!**/node_modules/**"
+  - "!build/**"
+  - "!src/**"
+  - "!test/**"
+# Prepared by packaging/prepare.mjs: helpers/ocr (Vision OCR helper) and, when
+# lane F has built it, renderer/ (the real W01–W06).
+extraResources:
+  - from: build/resources
+    to: .
+asar: true
+npmRebuild: false
+nodeGypRebuild: false
+mac:
+  category: public.app-category.productivity
+  minimumSystemVersion: "13.0"
+  # Hardened runtime + Developer ID. Signing happens only when a
+  # "Developer ID Application" identity is in the keychain; otherwise
+  # electron-builder skips it and packaging/sign.sh explains the skip.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: ../../../packaging/entitlements.mac.plist
+  entitlementsInherit: ../../../packaging/entitlements.mac.inherit.plist
+  # Not an App Sandbox (MAS) build: the main process must connect to the
+  # AgentDesktop Unix socket and run the OCR helper. See SPIKE.md §2.
+  type: distribution
+  target:
+    - dir
+    - dmg
+  extendInfo:
+    LSUIElement: false
+    NSHumanReadableCopyright: WeChat Agent contributors
+    LSMinimumSystemVersion: "13.0"
+dmg:
+  sign: false
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
