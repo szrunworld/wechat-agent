@@ -1,0 +1,13 @@
+{
+  "scene": "add-friend",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "add_friend",
+  "buttonsInclude": [
+    "发送"
+  ]
+}

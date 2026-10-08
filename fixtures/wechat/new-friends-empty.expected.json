@@ -1,0 +1,12 @@
+{
+  "scene": "new-friends-empty",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "new_friends",
+  "coverage": "end_confirmed",
+  "requests": []
+}

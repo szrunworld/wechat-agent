@@ -1,0 +1,13 @@
+{
+  "scene": "wrong-size",
+  "image": {
+    "width": 1000,
+    "height": 700,
+    "scale": 2
+  },
+  "applicability": "size_mismatch",
+  "coverage": "unreadable",
+  "warningsInclude": [
+    "size_mismatch"
+  ]
+}

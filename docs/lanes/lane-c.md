@@ -29,3 +29,51 @@
 - 完成后开 **draft PR** 到 `app-skeleton`，不要合并；PR 描述列：改了哪些文件、跑了什么命令和结果、T 用例状态、未完成项、INTERFACE REQUEST。
 - 别碰别的 lane 的目录，哪怕只是"顺手修一下"。
 
+
+---
+
+## 进度记录（2026-10-08，lane-c 分支）
+
+### 交付对照
+
+| 交付 | 状态 | 位置 |
+| --- | --- | --- |
+| 1 `createRecognizer(options)`，OCR 走 `ocr/ocr` 子进程，path 或 bytes（落 0600 临时文件后删） | 完成 | `packages/recognition/src/recognizer.ts`、`src/ocr.ts` |
+| 2 `profiles/wechat-4.1-1280x875-2x-dark.json` + `applicability()` | 完成（主题检查在 `recognize()` 内，见 INTERFACE REQUEST） | `profiles/`、`src/profile.ts` |
+| 3 `recognize()` → `PageFacts`：10 种页面类型、requests/chats/detail/bubbles/inputBox/buttons/texts/warnings | 完成 | `src/analyze.ts` |
+| 4 `coverage` 四态 | 完成 | `requestSection()` |
+| 5 歧义 + `identityCandidates()` | 完成 | `src/identity.ts` |
+| 6 绿色不等于接受 | 完成 | `requestSection()` |
+| 7 合成夹具 + `.expected.json` | 完成，15 张 | `fixtures/wechat/` |
+| 8 性能 | 已记录；空闲机 < 2 s，并行负载下 1.2–3.2 s | `packages/recognition/README.md` |
+| 协调者追加：`PageFacts.conversation?: { title, rect }` | 完成（本地交叉类型 `PageFactsWithConversation`，ports 合入后自动兼容） | `conversationTitle()` |
+
+### 完成条件
+
+- 旧 parse 测试：`legacy-parse.test.ts` 实际是 **7 个 `test()`**（任务书写 12），全部迁移到 `test/analyze.test.ts`（PageFacts 形状，像素坐标）并通过；`legacy-parse.ts` 已删除（`legacy/src/parse.ts` 仍是只读参考）。
+- 动作调用 grep：`grep -rnE "\.(click|type|key|scroll|press|drag)\(" packages/recognition/src packages/recognition/ocr` 无结果。
+- `npm run check`、`scripts/check-ownership.sh c` 退出码 0（见 PR）。
+
+### T 用例状态
+
+| 用例 | 状态 | 断言所在 |
+| --- | --- | --- |
+| T11 重名 → ambiguous | passed（夹具级） | `test/t11-identity.test.ts`（6 条）+ `test/fixtures.test.ts` "T11 on fixture"（真实 OCR，`new-friends-mixed`） |
+| T13 未知尺寸 → unreadable | passed（夹具级） | `test/t13-unreadable.test.ts`（8 条：size/scale/windowFrame/主题/中间灰/OCR 失败/未知 profile/revision）+ fixtures "T13 on fixtures" |
+| T14 零行三种 coverage | passed（夹具级） | `test/t14-coverage.test.ts`（4 条）+ fixtures "T14 on fixtures"：end_confirmed / current_viewport / partial（+ unreadable） |
+| T15 绿色选中行不判 pending | passed（夹具级） | `test/t15-green.test.ts`（4 条）+ fixtures "T15 on fixture"（整行 #07C160） |
+| T26 同文旧气泡 anchorKey 不同 | passed（夹具级） | `test/t26-bubbles.test.ts`（6 条）+ fixtures "T26 on fixture" |
+
+全部是 Fake/夹具级别通过，没有真机证据（真机只由协调者做）。
+
+### 未完成 / 已知限制
+
+- `conversation.input`、`scrollbar`、`theme.samples` 的几何是**估计值**（profile JSON 里标了 `$comment: estimated`），需协调者在真机截图上校核。
+- 性能在并行负载下超 2 s（OCR 子进程每次重载 Vision）；可做常驻 helper，未做。
+- 非 PNG artifact 没有像素采样 → 主题无法验证 → 按 `unreadable` 返回（不猜）。
+- 聊天列表 `unread` 来自角标数字或红色占比；无数字且无红色时为 false。
+
+### INTERFACE REQUEST
+
+- `INTERFACE REQUEST: Recognizer.applicability(image: ImageMeta)` 需要能拿到像素（`ImageInput`，或 `ImageMeta` 增加 `theme?: 'dark' | 'light'` 由平台/调用方采样后填入）—— 原因：任务书要求 `applicability()` 比对主题，但 `ImageMeta` 只有尺寸/scale，同步接口也无法读文件。当前做法：`applicability()` 只比尺寸/scale；主题在 `recognize()` 内采样，不匹配返回 `coverage: 'unreadable'` 并在 `warnings[0]` 写 `theme_mismatch: …`。
+- `INTERFACE REQUEST: PageFacts.conversation?: { title: string; rect: PixelRect }`（协调者已宣布将加入）—— 本包已通过 `PageFactsWithConversation` 交叉类型输出该字段；ports 加入后无需改动。
