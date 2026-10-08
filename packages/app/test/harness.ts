@@ -10,7 +10,7 @@ import type {
   SendMessagePayload, TaskType, WeChatTask,
 } from '@wechat-agent/ports';
 import { FakeDriver, FakeRecognizer, InMemoryLedger, type FakeDriverOptions } from '@wechat-agent/ports/fakes';
-import { createApplication, hashContent, ManualScheduler, type AppConfig, type Application } from '../src/index.ts';
+import { createApplication, hashContent, ManualScheduler, type AppConfig, type Application, type OutboxSink } from '../src/index.ts';
 
 export const T0 = '2026-10-08T10:00:00+08:00';
 
@@ -147,6 +147,8 @@ export async function makeHarness(options: {
   ledger?: InMemoryLedger;
   config?: Partial<AppConfig>;
   start?: boolean;
+  /** Default: the app's FileSink under the temp data dir. */
+  outboxSink?: OutboxSink;
 } = {}): Promise<Harness> {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'wechat-agent-e-'));
   const driver = options.driver ?? new FakeDriver({ principalRole: 'paired', ...options.driverOptions });
@@ -155,7 +157,7 @@ export async function makeHarness(options: {
   const scheduler = new ManualScheduler();
   const clock = makeClock();
   const app = createApplication({
-    driver, ledger, recognizer, handlers: registry(...(options.handlers ?? [])), now: clock.now, scheduler,
+    driver, ledger, recognizer, handlers: registry(...(options.handlers ?? [])), now: clock.now, scheduler, outboxSink: options.outboxSink,
     config: { dataDir, lockPath: null, reconnect: { baseMs: 0, maxMs: 0 }, cancelWaitMs: 5, patrolEnabled: false, baselineOnConnect: false, ...options.config },
   });
   if (options.start !== false) await app.start();

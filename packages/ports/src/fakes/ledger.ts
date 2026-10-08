@@ -229,13 +229,44 @@ export class InMemoryLedger implements Ledger {
 
   async enqueueOutbox(event: Omit<OutboxEvent, 'eventId' | 'state'>): Promise<OutboxEvent> {
     this.write();
-    const saved: OutboxEvent = { ...event, eventId: this.id('out'), state: 'pending' };
+    const same = [...this.outbox.values()].find((e) => e.taskId === event.taskId && e.revision === event.revision && e.payloadHash === event.payloadHash);
+    if (same) return same;
+    const saved: OutboxEvent = { ...event, eventId: this.id('out'), state: 'pending', attempts: 0, enqueuedAt: new Date().toISOString() };
     this.outbox.set(saved.eventId, saved);
     return saved;
   }
 
+  async transitionTaskWithOutbox(taskId: Id, to: TaskState, expectedRevision: Revision, now: Timestamp, reason: string | undefined,
+    outbox: (task: WeChatTask) => Omit<OutboxEvent, 'eventId' | 'state'>): Promise<{ task: WeChatTask; event: OutboxEvent }> {
+    // transitionTask throws before anything changes, so no event is written for a refused transition.
+    const task = await this.transitionTask(taskId, to, expectedRevision, now, reason);
+    const draft = outbox(task);
+    if (draft.taskId !== taskId || draft.revision !== task.revision) throw new LedgerConflictError('transition', `outbox event must belong to ${taskId}@${task.revision}`);
+    return { task, event: await this.enqueueOutbox(draft) };
+  }
+
   async pendingOutbox(limit = 50): Promise<OutboxEvent[]> {
     return [...this.outbox.values()].filter((e) => e.state === 'pending').slice(0, limit);
+  }
+
+  async deferOutbox(eventId: Id, retryAt: Timestamp, error: string): Promise<OutboxEvent> {
+    this.write();
+    const event = this.outbox.get(eventId);
+    if (!event) throw new LedgerConflictError('attempt', `no outbox event ${eventId}`);
+    Object.assign(event, { retryAt, attempts: (event.attempts ?? 0) + 1, lastError: error });
+    return event;
+  }
+
+  async settleOutbox(eventId: Id, state: 'delivered' | 'failed', detail: { receipt?: string; error?: string }, now: Timestamp): Promise<OutboxEvent> {
+    this.write();
+    const event = this.outbox.get(eventId);
+    if (!event) throw new LedgerConflictError('attempt', `no outbox event ${eventId}`);
+    Object.assign(event, { state, settledAt: now, receipt: detail.receipt, lastError: detail.error ?? event.lastError, retryAt: undefined });
+    return event;
+  }
+
+  async listOutbox(taskId: Id): Promise<OutboxEvent[]> {
+    return [...this.outbox.values()].filter((e) => e.taskId === taskId);
   }
 
   async markOutbox(eventId: Id, state: 'delivered' | 'failed', retryAt?: Timestamp): Promise<OutboxEvent> {

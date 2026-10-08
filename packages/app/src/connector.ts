@@ -119,6 +119,12 @@ export class RuntimeConnector {
     this.steps.reset('discover');
     this.hooks.onChange();
 
+    // A reconnect always starts from a fresh socket. The driver keeps its socket after a
+    // deadline_exceeded (a late reply is ignored) while this connector already counted that as a
+    // lost connection; createDriver().connect() refuses to run while 'connected', so the stale
+    // connection is closed here. Closing it also ends its connection_scoped Run on the platform,
+    // which is what the app assumed when it parked the task (ADR v2.2).
+    if (this.driver.state === 'connected') await this.driver.close().catch(() => undefined);
     let handshake: HandshakeResult;
     try {
       handshake = await this.driver.connect();
@@ -203,6 +209,9 @@ export class RuntimeConnector {
     this.steps.reset('discover');
     this.steps.set('discover', 'failed', `连接中断：${reason}`);
     this.closeStream();
+    // The platform must see what the app decided: a connection the app gave up on is closed now,
+    // so its Delegated Run ends on the platform too instead of lingering with input admitted.
+    if (this.driver.state === 'connected') void this.driver.close().catch(() => undefined);
     if (wasReady) this.hooks.onDisconnected(reason);
     this.scheduleReconnect();
     this.hooks.onChange();

@@ -49,6 +49,12 @@ export interface FakeRuntimeOptions {
   bound?: boolean;
   /** Refuse run.start when lifetime/ownership/origin are present (default true; ADR-05). */
   refuseEscalation?: boolean;
+  /**
+   * What a Delegated Run looks like right after its control connection dropped (ADR v2.2 §三):
+   * `confirmed` (default) ends it at once with quiescence confirmed; `pending` leaves it `stopping` /
+   * `quiescence: pending` (a native action still settling) until the test calls `confirmQuiescence(runId)`.
+   */
+  quiescenceOnDrop?: 'confirmed' | 'pending';
   faults?: FakeFault[];
 }
 
@@ -235,6 +241,14 @@ export class FakeRuntime {
     return this.calls.get(method) ?? 0;
   }
 
+  /** A Run left `stopping` by a drop under `quiescenceOnDrop: 'pending'` reaches quiescence now (ends cancelled). */
+  confirmQuiescence(runId: Id): Run {
+    const run = this.runs.get(runId);
+    if (!run) throw new Error(`unknown run ${runId}`);
+    if (run.phase !== 'ended') this.endRun(run, 'cancelled', run.closingReason ?? 'cancelled');
+    return this.runView(run) as unknown as Run;
+  }
+
   /** Appends an event to a Run (for tests that need traffic on a subscription). */
   emitEvent(runId: Id, type: string, data: Record<string, unknown> = {}): RunEvent {
     const run = this.runs.get(runId);
@@ -269,10 +283,13 @@ export class FakeRuntime {
     socket.on('close', () => {
       conn.alive = false;
       this.conns.delete(conn.id);
-      // Delegated Runs are connection-scoped: losing the control connection ends them.
+      // Delegated Runs are connection-scoped: losing the control connection ends them
+      // (or parks them stopping until quiescence, when the options say so).
       for (const runId of conn.runIds) {
         const run = this.runs.get(runId);
-        if (run && run.phase !== 'ended') this.endRun(run, 'cancelled', 'connection_closed');
+        if (!run || run.phase === 'ended') continue;
+        if (this.options.quiescenceOnDrop === 'pending') this.stopRun(run, 'connection_closed');
+        else this.endRun(run, 'cancelled', 'connection_closed');
       }
     });
   }
@@ -632,7 +649,7 @@ export class FakeRuntime {
     const session = this.sessionFromContext(context);
     if (!context.runId) throw new FakeError('invalid_argument', 'act needs context.runId', { phase: 'request' });
     const run = this.run(context.runId);
-    if (run.phase === 'ended') throw new FakeError('run_not_active', `run ${run.runId} has ended`);
+    if (run.phase === 'ended' || run.phase === 'stopping') throw new FakeError('run_not_active', `run ${run.runId} is ${run.phase}; it takes no new input`);
     if (this.admission !== 'enabled') throw new FakeError('input_disabled', 'input is stopped for all Runs');
     const snapshot = this.snapshots.get(params.snapshotId);
     if (!snapshot) throw new FakeError('not_found', `no snapshot ${params.snapshotId}`);
@@ -770,6 +787,15 @@ export class FakeRuntime {
     }
     const start = after ?? this.globalCursor;
     for (const entry of this.globalEvents) if (entry.cursor > start) this.write(conn, { apiVersion: RUNTIME_API_VERSION, event: entry.event, cursor: entry.cursor });
+  }
+
+  /** Input is closed and the Run is stopping; quiescence is still pending (a native action may be settling). */
+  private stopRun(run: RunState, closingReason: string): void {
+    run.phase = 'stopping';
+    run.quiescence = 'pending';
+    run.closingReason = closingReason;
+    run.revision += 1;
+    this.emit(run, 'run.stopping', { closingReason });
   }
 
   private endRun(run: RunState, outcome: 'success' | 'failed' | 'cancelled' | 'unknown', closingReason: string): void {

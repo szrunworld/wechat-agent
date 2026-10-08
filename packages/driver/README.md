@@ -99,6 +99,7 @@ await fake.close();   // 关掉所有连接，删掉临时 socket
 | `elements` | observe 返回的元素 |
 | `bound: false` | 初始不绑定窗口（observe 无 target，act → `invalid_target`） |
 | `refuseEscalation: false` | 不拒绝 run.start 的提升参数（默认拒绝） |
+| `quiescenceOnDrop` | 控制连接断开时它的 Run 怎么收场：`'confirmed'`（默认）立刻 `ended/cancelled/confirmed`；`'pending'` 先 `stopping` + `quiescence: pending`（`act` → `run_not_active`），直到 `confirmQuiescence(runId)` 才结束（ADR v2.2 §三的"安全取消并完成静止确认"） |
 | `faults` | 初始故障列表 |
 
 ### 注入点
@@ -118,6 +119,7 @@ await fake.close();   // 关掉所有连接，删掉临时 socket
 | `injectReceipt({ delivery: 'unknown', ... })` | act 正常处理但覆盖回执字段 |
 | `inject(fault)` | 原始形式（`FakeFault`） |
 | `dropConnections()` / `dropSubscriptions()` | 断掉全部 / 只断订阅连接 |
+| `confirmQuiescence(runId)` | `quiescenceOnDrop: 'pending'` 下让一个 `stopping` 的 Run 到达静止（`ended/cancelled/confirmed`） |
 | `corruptArtifact(id)` | 翻转一个字节但不改 sha256（`readArtifact` 必须报 `internal_error`） |
 | `emitEvent(runId, type, data)` | 给订阅者制造事件 |
 

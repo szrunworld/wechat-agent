@@ -11,6 +11,7 @@ import type { ApplicationService, AppSnapshot } from '@wechat-agent/ports';
 import { FakeApplicationService, sampleSnapshots, type SnapshotKey } from '@wechat-agent/ports/fakes';
 import { CALL_CHANNEL, SNAPSHOT_CHANNEL } from './channels.ts';
 import { createCallGateway } from './gateway.ts';
+import { runLedgerSmoke } from './ledger-smoke.ts';
 import { CLOSE_HINT, decideClose } from './lifecycle.ts';
 import { quitPrompt, runQuitFlow } from './quit.ts';
 import { shellStatus, STATUS_LABEL, trayToggle } from './status.ts';
@@ -156,6 +157,11 @@ class Shell {
       // socket under ~/Library and run the OCR helper from inside the bundle?
       report.socket = await probeSocket(process.env.WECHAT_AGENT_SPIKE_SOCKET);
       report.helper = await probeHelper(png);
+      // Ledger smoke (packaging/SQLITE-ABI.md): the real SQLite ledger, opened by
+      // this process with the better-sqlite3 build for its ABI, in the spike dir —
+      // never the user data directory. Also written on its own for verify-install.sh.
+      report.ledger = await runLedgerSmoke(join(spikeOut!, 'ledger'));
+      writeFileSync(join(spikeOut!, 'ledger-smoke.json'), JSON.stringify(report.ledger, null, 2));
       writeFileSync(join(spikeOut!, 'startup.json'), JSON.stringify(report, null, 2));
     } finally {
       this.quitting = true;

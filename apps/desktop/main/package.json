@@ -15,6 +15,7 @@
     "package:dmg": "npm run prepackage && electron-builder --config ../../../packaging/electron-builder.yml --mac dmg"
   },
   "devDependencies": {
+    "@wechat-agent/ledger": "*",
     "@wechat-agent/ports": "*",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",

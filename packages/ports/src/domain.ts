@@ -219,4 +219,10 @@ export interface OutboxEvent {
   payload: Record<string, unknown>;
   state: 'pending' | 'delivered' | 'failed';
   retryAt?: Timestamp;
+  /** Delivery bookkeeping, kept by the ledger. */
+  attempts?: number;
+  lastError?: string;
+  receipt?: string;
+  enqueuedAt?: Timestamp;
+  settledAt?: Timestamp;
 }

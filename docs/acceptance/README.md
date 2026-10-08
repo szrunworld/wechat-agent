@@ -9,6 +9,8 @@
 | `cases/T01.md … T42.md` | 每条测试用例一个记录文件：front matter 是方案 §13 的全部字段，正文是条件/操作/预期/归属/关联测试 |
 | `steps/A01.md … A12.md` | 验收步骤：执行与记录、通过条件、证据、关联用例 |
 | `support-matrix.md` | 微信版本 × 缩放 × 主题 × 窗口尺寸的支持矩阵，初始全部 `not_tested` |
+| `stage4-readonly-plan.md` | 阶段 4 真机只读验收（A01–A04）的执行计划、异常步骤与证据模板；配套 `scripts/stage4-env-check.sh` 与 `tests/integration/test/rehearsal.test.ts` |
+| `driver-disconnect-review.md` | Delegated Run 断连语义审查（ADR v2.2 §三）：Driver / Fake Runtime / App 三层对照、偏差与修复；证据 `tests/integration/test/driver-disconnect.test.ts` |
 | `../../tests/integration/test/lint-acceptance.test.ts` | 记录 lint（`npm test -w tests/integration`） |
 
 ## 记录字段（方案 §13，每项必填，不得预写 pass）
@@ -107,4 +109,4 @@ front matter 是扁平的 `key: value`（空值写 `""`）。lint 规则：
 | 竖切 | `task.create → waiting_approval`（`pendingContentHash` 为 app 算的 sha256，`approval` 缺席）→ `task.approve`（原样回传 hash）→ 重新 observe → 一次危险 act → 已添加 → `confirmed`；attempt 链全部 `verified`、requestId 互不相同、`findOpenAttempts` 为空、回执原样入库、`approval.consumed = true`；UI 自造的 hash 被拒后任务重新准备并以同一 hash 再次请求审批 | `real-stack.test.ts` 前两例 |
 | 基线 | `baselineOnConnect` 打开时，连接后先经 lane D 只读读取一次 新的朋友（act=0，step `baseline` done），之后的任务脚本正常 | `real-stack.test.ts` 末例 |
 
-已知未覆盖/未解决（阶段 3 范围内）：lane E 不写 outbox 事件（任务书未要求，lane H 的 stub 写过，归属待定）；`FakeDriver` 不会在断连时结束 connection_scoped Run，T08 由测试代替平台调用 `confirmQuiescence`；lane D 在危险 act 前的 `consumeApproval` 发生在 `checkSignal` 之前，暂停后晚到的续体可能已消费审批但不会 act（保守，不断言）。
+已知未覆盖/未解决（阶段 3 范围内）：Outbox 由 App core 写入并投递（PR #11，fake 与真 SQLite 双跑，含崩溃恢复）；`FakeDriver` 不会在断连时结束 connection_scoped Run，T08 由测试代替平台调用 `confirmQuiescence`；lane D 在危险 act 前的 `consumeApproval` 发生在 `checkSignal` 之前，暂停后晚到的续体可能已消费审批但不会 act（保守，不断言）。

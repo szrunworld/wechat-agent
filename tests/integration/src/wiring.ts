@@ -8,9 +8,10 @@
 //   WECHAT_AGENT_SLICE=ledger,handlers,app   also selects the real packages
 //   (exploratory only; the acceptance path is the explicit options below)
 //
-// The driver stays FakeDriver until lane A's Fake Runtime server lands (its
-// start/stop API is not frozen in ports); the recognizer stays scripted
-// because the slice is about flows, not pixels.
+// The driver is FakeDriver by default; a test that wants the real client
+// (lane A's createDriver over its Fake Runtime server, or over a live
+// AgentDesktop) passes one in as `driver` (stage 4 rehearsal). The recognizer
+// stays scripted because the slice is about flows, not pixels.
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,13 +19,14 @@ import type { AgentDesktopDriver, HandlerRegistry, Ledger, PageFacts, Recognizer
 import { FakeDriver, InMemoryLedger, type FakeDriverOptions } from '@wechat-agent/ports/fakes';
 import { openLedger } from '@wechat-agent/ledger';
 import { createHandlers } from '@wechat-agent/handlers';
-import { createApplication, type AppConfig } from '@wechat-agent/app';
+import { createApplication, MemorySink, type AppConfig, type OutboxSink, type Scheduler } from '@wechat-agent/app';
 import { GatedRecognizer, T0, clock, observation } from './fixtures.ts';
 import { createStubApplication, type Application } from './stub-app.ts';
 import { createStubHandlers } from './stub-handlers.ts';
 
 export interface SliceOptions {
-  driver?: FakeDriverOptions;
+  /** FakeDriver options (default), or a ready-made AgentDesktopDriver (lane A's createDriver) to run the slice over a real client. */
+  driver?: FakeDriverOptions | AgentDesktopDriver;
   /** Scripted PageFacts, in order; the last repeats. */
   facts?: PageFacts[];
   /** Confirm a test account before start (revision 1). Default true. */
@@ -39,8 +41,12 @@ export interface SliceOptions {
    */
   app?: 'real' | 'stub';
   appConfig?: Partial<AppConfig>;
+  /** Real app only: where outbox events are delivered. Default: a MemorySink the test can inspect as `slice.outbox`. */
+  outboxSink?: OutboxSink;
   now?: () => Timestamp;
   quiescenceTimeoutMs?: number;
+  /** Timer seam of the real app (reconnect backoff, event re-subscribe, patrol); default: real timers. */
+  scheduler?: Scheduler;
 }
 
 export interface Slice {
@@ -50,6 +56,8 @@ export interface Slice {
   handlers: HandlerRegistry;
   app: Application;
   now: () => Timestamp;
+  /** The real app's outbox sink (a MemorySink unless the test passed its own); undefined for the stub app. */
+  outbox?: OutboxSink;
 }
 
 /** Four bytes stand in for the screenshot; the scripted recognizer never looks at them. */
@@ -60,11 +68,22 @@ const real = new Set((process.env.WECHAT_AGENT_SLICE ?? '').split(',').map((s) =
 /** The real app's defaults for the slice: no setup-time observations outside the test's script, no timers. */
 export const REAL_APP_SLICE_CONFIG: Partial<AppConfig> = { baselineOnConnect: false, patrolEnabled: false, cancelWaitMs: 50 };
 
-export async function createSlice(options: SliceOptions = {}): Promise<Slice> {
+/** A slice over an injected real driver: everything else is the same, only `driver` is not a FakeDriver. */
+export type RealDriverSlice = Omit<Slice, 'driver'> & { driver: AgentDesktopDriver };
+
+function isDriver(value: SliceOptions['driver']): value is AgentDesktopDriver {
+  return typeof value === 'object' && value !== null && typeof (value as AgentDesktopDriver).connect === 'function';
+}
+
+export async function createSlice(options: Omit<SliceOptions, 'driver'> & { driver: AgentDesktopDriver }): Promise<RealDriverSlice>;
+export async function createSlice(options?: SliceOptions): Promise<Slice>;
+export async function createSlice(options: SliceOptions = {}): Promise<Slice | RealDriverSlice> {
   const now = options.now ?? clock(T0).now;
 
-  // Driver: lane A's createDriver + Fake Runtime once its server API exists; FakeDriver until then.
-  const driver = new FakeDriver({ principalRole: 'paired', observations: [observation()], artifacts: { art_fixture: FIXTURE_PNG }, ...options.driver });
+  // Driver: an injected AgentDesktopDriver (lane A's createDriver), else FakeDriver over the given options.
+  const driver: AgentDesktopDriver = isDriver(options.driver)
+    ? options.driver
+    : new FakeDriver({ principalRole: 'paired', observations: [observation()], artifacts: { art_fixture: FIXTURE_PNG }, ...options.driver });
 
   // Ledger: lane B's SQLite ledger on a temp path, or the in-memory reference.
   const ledger = options.ledger ?? (real.has('ledger') ? await openLedger(join(mkdtempSync(join(tmpdir(), 'wechat-agent-slice-')), 'ledger.sqlite')) : new InMemoryLedger());
@@ -81,11 +100,12 @@ export async function createSlice(options: SliceOptions = {}): Promise<Slice> {
 
   // Application: lane E's createApplication or the stub; both return { service, start, stop }.
   const appKind = options.app ?? (real.has('app') ? 'real' : 'stub');
+  const outbox = appKind === 'real' ? options.outboxSink ?? new MemorySink() : undefined;
   const app: Application = appKind === 'real'
-    ? createApplication({ driver, ledger, recognizer, handlers, now, config: { ...REAL_APP_SLICE_CONFIG, ...options.appConfig } })
+    ? createApplication({ driver, ledger, recognizer, handlers, now, scheduler: options.scheduler, outboxSink: outbox, config: { ...REAL_APP_SLICE_CONFIG, ...options.appConfig } })
     : createStubApplication({ driver, ledger, recognizer, handlers, now, quiescenceTimeoutMs: options.quiescenceTimeoutMs });
 
-  return { driver, ledger, recognizer, handlers, app, now };
+  return { driver: driver as FakeDriver, ledger, recognizer, handlers, app, now, outbox };
 }
 
 export type { AgentDesktopDriver, Recognizer };
