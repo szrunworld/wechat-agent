@@ -5,7 +5,7 @@
 ## 交付
 
 1. `createDriver(config): AgentDesktopDriver`：Unix socket 客户端；一行一帧 UTF-8 JSON，≤1 MiB（超出本地拒绝，`frame_too_large`，`notSent=true`）；同一连接按序应答；`requestTimeoutMs` 超时 → `deadline_exceeded`（phase transport，notSent 不确定时为 false）。
-2. 端点：`config.endpoint ?? DEFAULT_CONTROL_ENDPOINT`，展开 `~`。**没有回退列表**，连不上就 `runtime_offline`（phase connect，notSent=true）。
+2. 端点：`config.endpoint ?? DEFAULT_RUNTIME_ENDPOINT`，展开 `~`。**没有回退列表**，连不上就 `runtime_offline`（phase connect，notSent=true）。
 3. `connect()`：`runtime.handshake`，校验 `product === 'AgentDesktop'`、`apiVersions` 含 `agentdesktop.runtime/1`；不符 → state `incompatible`，抛 `version_mismatch`。
 4. 全部方法按 `methods.json` 的名字和 `runtime.schema.json` 的参数；`startRun` 永远不传 lifetime/ownership/origin。
 5. `act(context, params, requestId)`：requestId 由调用方给；同 requestId 重发同参数应返回原回执（平台幂等）；不同参数得到 `idempotency_conflict` 要原样抛出。
@@ -39,7 +39,7 @@
 | # | 项 | 状态 |
 | --- | --- | --- |
 | 1 | `createDriver`：JSONL 帧 ≤1 MiB 本地拒绝（`frame_too_large`，notSent）、按 requestId 配对应答、`requestTimeoutMs` → `deadline_exceeded`（transport，notSent=false） | 完成 |
-| 2 | 端点 `config.endpoint ?? DEFAULT_CONTROL_ENDPOINT`，`~` 展开，无回退；连不上 `runtime_offline`（connect，notSent） | 完成 |
+| 2 | 端点 `config.endpoint ?? DEFAULT_RUNTIME_ENDPOINT`，`~` 展开，无回退；连不上 `runtime_offline`（connect，notSent） | 完成 |
 | 3 | `connect()` 握手校验 product/apiVersions，不符 → `incompatible` + `version_mismatch` | 完成 |
 | 4 | 方法名与参数按 `methods.json` / `runtime.schema.json`；`startRun` 不传 lifetime/ownership/origin | 完成 |
 | 5 | `act` 的 requestId 由调用方给，平台幂等回执 / `idempotency_conflict` 原样透传 | 完成 |

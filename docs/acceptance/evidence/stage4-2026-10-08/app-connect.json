@@ -1,0 +1,149 @@
+{
+  "probe": "wechat-agent stage4-app-connect",
+  "at": "2026-10-08T12:25:39.843Z",
+  "dataDir": "/var/folders/5d/nycvbsbn5dq7cd0k0k83qb8h0000gn/T/wechat-agent-stage4-7B9f2C",
+  "connection": {
+    "state": "unpaired",
+    "endpoint": "~/Library/Application Support/AgentDesktop/runtime.sock",
+    "product": "AgentDesktop",
+    "apiVersion": "agentdesktop.runtime/1",
+    "missingCapabilities": [],
+    "steps": [
+      {
+        "key": "discover",
+        "state": "done",
+        "detail": "/tmp/adt-wx/side.runtime.sock"
+      },
+      {
+        "key": "contract",
+        "state": "done",
+        "detail": "AgentDesktop agentdesktop.runtime/1"
+      },
+      {
+        "key": "pairing",
+        "state": "blocked",
+        "detail": "未配对（principal.role=none）：CR01 落地前外发保持 blocked"
+      },
+      {
+        "key": "window",
+        "state": "failed",
+        "detail": "没有可用的桌面"
+      },
+      {
+        "key": "account",
+        "state": "blocked",
+        "detail": "微信窗口未绑定，无法采集账号证据"
+      },
+      {
+        "key": "baseline",
+        "state": "done",
+        "detail": "已配置跳过"
+      }
+    ]
+  },
+  "inputGate": "closed",
+  "account": null,
+  "features": {
+    "read_list": {
+      "enabled": true
+    },
+    "accept_request": {
+      "enabled": false,
+      "reason": "pairing_missing",
+      "detail": "未配对：CR01 落地前外发保持 blocked"
+    },
+    "add_friend": {
+      "enabled": false,
+      "reason": "pairing_missing",
+      "detail": "未配对：CR01 落地前外发保持 blocked"
+    },
+    "reply_draft": {
+      "enabled": false,
+      "reason": "account_unconfirmed",
+      "detail": "请先确认当前微信账号"
+    },
+    "send_message": {
+      "enabled": false,
+      "reason": "pairing_missing",
+      "detail": "未配对：CR01 落地前外发保持 blocked"
+    },
+    "handback": {
+      "enabled": false,
+      "reason": "capability_missing",
+      "detail": "归还能力未验证（CR03）：请按手动指引归还窗口"
+    }
+  },
+  "connectionCheck": {
+    "state": "unpaired",
+    "apiVersion": "agentdesktop.runtime/1",
+    "methods": [
+      "runtime.handshake",
+      "runtime.status",
+      "runtime.capabilities",
+      "desktop.list",
+      "desktop.show",
+      "app.list",
+      "window.list",
+      "desktop.create",
+      "desktop.destroy",
+      "app.launch",
+      "window.bind",
+      "window.unbind",
+      "session.open",
+      "session.show",
+      "session.close",
+      "observe",
+      "request.show",
+      "act",
+      "wait",
+      "run.start",
+      "run.attach",
+      "run.finish",
+      "run.show",
+      "run.events",
+      "run.wait",
+      "run.cancel",
+      "run.list",
+      "runtime.stopAll",
+      "runtime.enableInput",
+      "artifact.show",
+      "artifact.read",
+      "events.subscribe",
+      "events.unsubscribe",
+      "ai.connections.list",
+      "ai.connections.get",
+      "ai.connections.create",
+      "ai.connections.update",
+      "ai.connections.disable",
+      "ai.connections.delete",
+      "ai.credentials.rotate",
+      "ai.models.list",
+      "ai.models.refresh",
+      "ai.modelProfiles.list",
+      "ai.modelProfiles.get",
+      "ai.modelProfiles.create",
+      "ai.modelProfiles.update",
+      "ai.modelProfiles.disable",
+      "ai.modelProfiles.delete",
+      "ai.profiles.list",
+      "ai.profiles.get",
+      "ai.profiles.create",
+      "ai.profiles.update",
+      "ai.profiles.disable",
+      "ai.profiles.delete",
+      "ai.profiles.default.get",
+      "ai.profiles.setDefault",
+      "ai.tests.start",
+      "ai.operations.get",
+      "ai.operations.cancel",
+      "ai.usage.summary",
+      "gui.runs.start",
+      "gui.runs.get",
+      "gui.runs.cancel",
+      "gui.runs.events"
+    ],
+    "missingCapabilities": []
+  },
+  "tasks": 0,
+  "actsSent": 0
+}

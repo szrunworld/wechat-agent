@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test, type TestContext } from 'node:test';
-import { DEFAULT_CONTROL_ENDPOINT, DriverError, MAX_ARTIFACT_CHUNK_BYTES, RUNTIME_API_VERSION } from '@wechat-agent/ports';
+import { DEFAULT_RUNTIME_ENDPOINT, DriverError, MAX_ARTIFACT_CHUNK_BYTES, RUNTIME_API_VERSION } from '@wechat-agent/ports';
 import type { Action, AgentDesktopDriver, DriverConfig, EventFrame } from '@wechat-agent/ports';
 import { FakeRuntime, METHODS, createDriver, resolveEndpoint, type FakeRuntimeOptions } from '../src/index.ts';
 import { CLIENT } from './examples.ts';
@@ -51,8 +51,8 @@ function driverError(e: unknown, code: string, extra: Partial<DriverError['error
 
 const click = (x: number, y: number): Action => ({ kind: 'click', target: { imagePoint: { x, y } } });
 
-test('endpoint: config.endpoint ?? DEFAULT_CONTROL_ENDPOINT, ~ expanded, nothing else rewritten', () => {
-  assert.equal(resolveEndpoint(undefined), path.join(os.homedir(), DEFAULT_CONTROL_ENDPOINT.slice(2)));
+test('endpoint: config.endpoint ?? DEFAULT_RUNTIME_ENDPOINT, ~ expanded, nothing else rewritten', () => {
+  assert.equal(resolveEndpoint(undefined), path.join(os.homedir(), DEFAULT_RUNTIME_ENDPOINT.slice(2)));
   assert.equal(resolveEndpoint('~/Library/x.sock'), path.join(os.homedir(), 'Library/x.sock'));
   assert.equal(resolveEndpoint('/tmp/abs.sock'), '/tmp/abs.sock');
   assert.throws(() => createDriver({ client: { name: '', version: '' } }), /invalid_argument/);

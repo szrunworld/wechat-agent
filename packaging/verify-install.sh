@@ -39,7 +39,7 @@ run_spike() { node -e 'const p=require("child_process").spawn(process.argv[1],[]
 echo "T41 verify-install: HOME=$HOME"
 mkdir -p "$HOME/Applications" "$DATA" "$PLATFORM"
 printf 'ledger-v1\n' > "$DATA/ledger.sqlite"
-printf 'platform-socket-placeholder\n' > "$PLATFORM/control.sock.marker"
+printf 'platform-socket-placeholder\n' > "$PLATFORM/runtime.sock.marker"
 LEDGER_BEFORE=$(shasum -a 256 "$DATA/ledger.sqlite" | cut -d' ' -f1)
 
 echo "step 1: install"
@@ -71,7 +71,7 @@ check "app started and reached ready-to-show" '[ -s "$SPIKE/startup.json" ] && g
 check "placeholder rendered" '[ -s "$SPIKE/placeholder.png" ]'
 check "user data lives in Application Support/$NAME" '[ -d "$DATA" ] && [ -n "$(ls -A "$DATA")" ]'
 check "ledger untouched by first run" '[ "$(shasum -a 256 "$DATA/ledger.sqlite" | cut -d" " -f1)" = "$LEDGER_BEFORE" ]'
-check "nothing written under AgentDesktop" '[ "$(ls -A "$PLATFORM" | tr -d "\n")" = "control.sock.marker" ]'
+check "nothing written under AgentDesktop" '[ "$(ls -A "$PLATFORM" | tr -d "\n")" = "runtime.sock.marker" ]'
 # Ledger smoke (SQLITE-ABI.md): the packaged main process opened a real SQLite
 # ledger with the Electron-ABI better-sqlite3, wrote a legacy suppression, read it back.
 check "ledger smoke ran inside the packaged process on Electron's ABI" '[ -s "$SPIKE/ledger-smoke.json" ] && node -e "const r=require(process.argv[1]);process.exit(r.ok===true&&r.electron===process.argv[2]&&r.modules===process.versions.modules?1:0)" "$SPIKE/ledger-smoke.json" "$ELECTRON_VERSION"'
@@ -95,11 +95,11 @@ echo "step 4: uninstall"
 ./uninstall.sh "$APP" >/dev/null
 check "app bundle removed" '[ ! -e "$APP" ]'
 check "ledger kept by default" '[ -f "$DATA/ledger.sqlite" ]'
-check "AgentDesktop untouched" '[ -f "$PLATFORM/control.sock.marker" ]'
+check "AgentDesktop untouched" '[ -f "$PLATFORM/runtime.sock.marker" ]'
 OTHER="$HOME/Library/Application Support/OtherApp"; mkdir -p "$OTHER"; touch "$OTHER/keep"
 ./uninstall.sh --remove-data "$APP" >/dev/null
 check "--remove-data removes the ledger directory" '[ ! -e "$DATA" ]'
-check "--remove-data leaves AgentDesktop and other apps alone" '[ -f "$PLATFORM/control.sock.marker" ] && [ -f "$OTHER/keep" ]'
+check "--remove-data leaves AgentDesktop and other apps alone" '[ -f "$PLATFORM/runtime.sock.marker" ] && [ -f "$OTHER/keep" ]'
 check "uninstall refuses a bundle that is not ours" 'mkdir -p "$HOME/Applications/Other.app/Contents" && printf "<plist><dict><key>CFBundleIdentifier</key><string>com.example.other</string></dict></plist>" > "$HOME/Applications/Other.app/Contents/Info.plist" && ./uninstall.sh "$HOME/Applications/Other.app" >/dev/null 2>&1; [ $? = 2 ] && [ -d "$HOME/Applications/Other.app" ]'
 
 rm -rf "$FAKE_HOME"

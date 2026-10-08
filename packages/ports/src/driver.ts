@@ -1,12 +1,16 @@
-// The only seam to the platform: AgentDesktop runtime/1 over control.sock.
+// The only seam to the platform: AgentDesktop runtime/1 over runtime.sock.
 // Wire types follow contracts/agentdesktop-runtime-v1/runtime.schema.json.
 // Lane A implements this; lanes D, E and H consume it.
 
 import type { Id, Timestamp } from './domain.ts';
 
 export const RUNTIME_API_VERSION = 'agentdesktop.runtime/1';
-/** Fixed endpoint (runtime-api-v1-freeze.md §1). The driver expands `~`; it never probes other sockets. */
-export const DEFAULT_CONTROL_ENDPOINT = '~/Library/Application Support/AgentDesktop/control.sock';
+/**
+ * The host's single runtime/1 endpoint (agentdesktop main fa2222f, A2): runtime.sock.
+ * ai.sock is gone and control.sock is not an execution entry. The driver expands `~`;
+ * it never probes other sockets.
+ */
+export const DEFAULT_RUNTIME_ENDPOINT = '~/Library/Application Support/AgentDesktop/runtime.sock';
 export const MAX_FRAME_BYTES = 1_048_576;
 export const MAX_ARTIFACT_CHUNK_BYTES = 524_288;
 export const EXPECTED_PRODUCT = 'AgentDesktop';
@@ -82,6 +86,8 @@ export interface Capabilities {
     permissions: { screenRecording: string; accessibility: string };
     features: string[];
   };
+  /** GUI unit capabilities (unit.run); not used by this app in P0. */
+  gui?: Record<string, unknown>;
 }
 
 export interface ProcessIdentity { pid: number; startedAt: Timestamp | null }
@@ -101,6 +107,8 @@ export interface Observation {
   target: ObservedTarget | null;
   image: ImageArtifact | null;
   elements: Element[];
+  /** What this observation could see: the element read may be partial or unavailable while the screenshot is complete. */
+  coverage?: { screenshot: 'complete' | 'not_requested'; ax: 'complete' | 'partial' | 'unavailable' | 'not_requested'; axReason?: 'deadline' | 'limits' | 'busy' | 'error' };
 }
 
 export type ActionTarget = { elementRef: Id } | { imagePoint: { x: number; y: number } };
@@ -126,6 +134,7 @@ export interface ActionReceipt {
   route: string | null;
   target: { generation: number; process: ProcessIdentity; windowId: number; elementRef: Id | null; point: { x: number; y: number } | null };
   timing: { acceptedAt: Timestamp; dispatchedAt: Timestamp; completedAt: Timestamp };
+  /** Why the action was not delivered, failed or has an unknown outcome; absent when delivered. */
   reason?: { code: string; message: string };
 }
 
@@ -152,6 +161,8 @@ export interface Run {
   endedAt?: Timestamp;
   receipts: Id[];
   unknownActions: number;
+  /** Set on unit runs only. */
+  unit?: Record<string, unknown>;
 }
 
 export interface RunEvent { runId: Id; sequence: number; at: Timestamp; type: string; data: Record<string, unknown> }
@@ -172,7 +183,7 @@ export interface WaitCondition { kind: 'elementPresent' | 'elementAbsent'; role?
 export interface WaitResult { satisfied: true; snapshotId: Id; matches: Element[] }
 
 export interface DriverConfig {
-  /** Defaults to DEFAULT_CONTROL_ENDPOINT. There is no fallback list. */
+  /** Defaults to DEFAULT_RUNTIME_ENDPOINT. There is no fallback list. */
   endpoint?: string;
   client: { name: string; version: string };
   requestTimeoutMs?: number;

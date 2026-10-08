@@ -65,7 +65,7 @@
 
 | CR | 内容 | 阻断什么 | 本仓库对策 |
 | --- | --- | --- | --- |
-| CR01 | paired principal 身份、grants、撤销、跨主体 request/run/artifact 过滤；统一 `control.sock` | P0 真实外发 | lane E 能力门禁默认 `blocked(pairing_missing)`；lane A 的端点可配置、无回退探测 |
+| CR01 | paired principal 身份、grants、撤销、跨主体 request/run/artifact 过滤（agentdesktop PR3，`hub.pairing/clients/grants.*` 截至 main `fa2222f` 仍为 reserved） | P0 真实外发 | lane E 能力门禁默认 `blocked(pairing_missing)`；lane A 的端点可配置、无回退探测 |
 | CR02 | 通用前台 input route、弹层/子窗口目标绑定、中文输入与剪贴板保全 | 加好友、部分回复 | lane D 在缺路由时返回 `blocked(capability_missing)`，不做前台旁路 |
 | CR03 | takeover/handback 或已验证的 `window.unbind` 归还语义 | 一键接管/归还 | lane E `window.requestHandback` 缺能力时显示手动指引 |
 | CR04 | `unit.run` 与同一 Runtime 账本 | P1 | 不进 P0 |
@@ -125,6 +125,6 @@ agent 提示词模板（每条 lane 替换 X 和任务书路径）：
 
 - **SQLite ABI（2026-10-08）**：Electron 44 内嵌 Node 24（`NODE_MODULE_VERSION` 149）≠ 本机 Node 22（127），打包后的主进程装不上仓库里的 better-sqlite3；定为**打包时按 Electron ABI 从源码重编**（`packaging/rebuild-native.mjs`，只动 `build/native` 副本，Electron 内实测打开数据库），`packages/ledger` 不改、不换 `node:sqlite`（Electron 44 有它，但错误码模型不同，T38 停写逻辑要重写，留作后备）；打包态 ledger smoke 进 T41（`verify-install.sh` 33 条断言），结论与证据在 `packaging/SQLITE-ABI.md`。
 - **壳选型**：方案建议 Electron + React（D 级设计）。本计划按它启动 F/G；若 lane G 的 spike 结论是体积/签名不可接受，F 的 React 视图与 IPC schema 不变，只换壳。
-- **端点不一致**：冻结文档说 `control.sock`，acp 分支 EndpointResolver 仍是 `runtime.sock`。lane A 把端点做成显式配置项，默认按冻结文档，不做回退探测；真机前由协调者确认发行分支。
+- **端点（2026-10-08 更正）**：agentdesktop main `fa2222f`（含 PR #2 `134b451`，A2 单端点）宿主只监听一个 runtime/1 端点 `runtime.sock`；`ai.sock` 已删除，`control.sock` 不是执行入口。默认端点改为 `~/Library/Application Support/AgentDesktop/runtime.sock`，不做回退探测；平台现状一律以 agentdesktop `main` 为准，不再参考 acp 分支。契约快照同步到 `fa2222f`（见 `contracts/agentdesktop-runtime-v1/SOURCE.md`）。
 - **配对未落地**：hub.pairing/grants reserved。真实外发在 CR01 完成前始终 `blocked`，lane 不得为了测试申请 owner 权限。
 - **真机证据只有协调者产出**：lane 的全部通过记录都是 Fake/夹具级别，签收时必须区分。

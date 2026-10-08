@@ -1,6 +1,6 @@
 // Stage 4 read-only environment check (docs/acceptance/stage4-readonly-plan.md §2).
 // Run through scripts/stage4-env-check.sh. It only reads: the contract snapshot
-// on disk, whether control.sock exists, runtime.handshake / runtime.capabilities /
+// on disk, whether runtime.sock exists, runtime.handshake / runtime.capabilities /
 // runtime.status over lane A's real client, and `ps` for the WeChat process.
 // It never calls window.bind, session.open, run.start, observe or act, and it
 // never starts, moves or clicks anything. Exit 0 = ready, 1 = not ready, 2 = bad usage.
@@ -11,7 +11,7 @@ import path from 'node:path';
 import { createDriver, resolveEndpoint } from '@wechat-agent/driver';
 import { createHandlers } from '@wechat-agent/handlers';
 import { CORE_METHODS, WECHAT_BUNDLE_ID } from '@wechat-agent/app';
-import { DEFAULT_CONTROL_ENDPOINT, DriverError, EXPECTED_PRODUCT, RUNTIME_API_VERSION } from '@wechat-agent/ports';
+import { DEFAULT_RUNTIME_ENDPOINT, DriverError, EXPECTED_PRODUCT, RUNTIME_API_VERSION } from '@wechat-agent/ports';
 import type { Capabilities, HandshakeResult } from '@wechat-agent/ports';
 
 const CLIENT = { name: 'wechat-agent-env-check', version: '0.1.0' };
@@ -56,9 +56,9 @@ function checkEndpoint(configured: string | undefined): EnvCheckReport['endpoint
   const resolved = resolveEndpoint(configured);
   try {
     const st = statSync(resolved);
-    return { configured: configured ?? DEFAULT_CONTROL_ENDPOINT, resolved, exists: true, isSocket: st.isSocket() };
+    return { configured: configured ?? DEFAULT_RUNTIME_ENDPOINT, resolved, exists: true, isSocket: st.isSocket() };
   } catch {
-    return { configured: configured ?? DEFAULT_CONTROL_ENDPOINT, resolved, exists: false, isSocket: false };
+    return { configured: configured ?? DEFAULT_RUNTIME_ENDPOINT, resolved, exists: false, isSocket: false };
   }
 }
 
@@ -123,7 +123,7 @@ export async function runEnvCheck(options: { endpoint?: string; repoRoot: string
   const endpoint = checkEndpoint(options.endpoint);
   const report: EnvCheckReport = { checkedAt: new Date().toISOString(), contract, endpoint, wechat: checkWeChat(), ready: false, reasons, warnings };
   if (!endpoint.exists) {
-    reasons.push(`control.sock 不存在：${endpoint.resolved}（AgentDesktop 未运行，或发行分支的端点不是冻结文档的路径）`);
+    reasons.push(`runtime.sock 不存在：${endpoint.resolved}（AgentDesktop 未运行）`);
   } else if (!endpoint.isSocket) {
     reasons.push(`${endpoint.resolved} 存在但不是 Unix socket`);
   } else {
@@ -153,7 +153,7 @@ function printReport(report: EnvCheckReport): void {
   const line = (s: string) => process.stdout.write(`${s}\n`);
   line(`stage4 env check @ ${report.checkedAt}`);
   line(`契约快照 ${report.contract.ok ? 'ok' : 'MISMATCH'}: ${report.contract.files.map((f) => `${f.name}=${f.ok ? f.expected.slice(0, 12) : `${f.actual.slice(0, 12)}≠${f.expected.slice(0, 12)}`}`).join(' ')}`);
-  line(`control.sock: ${report.endpoint.resolved} → ${report.endpoint.exists ? (report.endpoint.isSocket ? 'exists (socket)' : 'exists (NOT a socket)') : 'missing'}`);
+  line(`runtime.sock: ${report.endpoint.resolved} → ${report.endpoint.exists ? (report.endpoint.isSocket ? 'exists (socket)' : 'exists (NOT a socket)') : 'missing'}`);
   if (report.runtime) {
     const rt = report.runtime;
     line(`runtime: product=${rt.product} ${rt.productVersion} apiVersion=${rt.apiVersion} apiVersions=[${rt.apiVersions.join(',')}] instance=${rt.instanceId} pid=${rt.pid} startedAt=${rt.startedAt}`);

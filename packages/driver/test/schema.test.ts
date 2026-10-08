@@ -25,6 +25,9 @@ test('envelope: apiVersion const, requestId pattern, method pattern, no extra ke
   assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'Observe', params: {} }).some((p) => p.includes('method')));
   assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'observe', params: {}, extra: 1 }).some((p) => p.includes('extra')));
   assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'hub.pairing.start', params: {} }).some((p) => p.includes('not an implemented method')));
+  // Platform service families (model configuration, the transitional gui.runs) are implemented but not this client's.
+  assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'ai.profiles.list', params: {} }).some((p) => p.includes('does not call')));
+  assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'gui.runs.start', params: {} }).some((p) => p.includes('does not call')));
 });
 
 test('params: additionalProperties, pattern, oneOf, not, if/then, dependentRequired, uniqueItems, enum null', () => {

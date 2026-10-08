@@ -5,7 +5,7 @@ export { FakeRuntime, type FakeRuntimeOptions, type FakeFault, type LoggedReques
 export { encodeFrame, LineDecoder } from './framing.ts';
 export { RpcConnection } from './connection.ts';
 export {
-  SchemaValidator, validator, runtimeSchema, methodsContract, errorsContract, METHODS, ERROR_CODES,
+  SchemaValidator, validator, runtimeSchema, methodsContract, errorsContract, METHODS, ALL_IMPLEMENTED_METHODS, ERROR_CODES,
   requestProblems, resultProblems, paramsSchemaName, resultSchemaName, canonicalJson,
   type JsonSchema, type MethodSpec, type ErrorSpec,
 } from './schema.ts';

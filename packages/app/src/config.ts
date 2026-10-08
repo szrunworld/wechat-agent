@@ -1,9 +1,9 @@
 import os from 'node:os';
 import path from 'node:path';
-import { DEFAULT_CONTROL_ENDPOINT } from '@wechat-agent/ports';
+import { DEFAULT_RUNTIME_ENDPOINT } from '@wechat-agent/ports';
 
 export interface AppConfig {
-  /** control.sock the driver was built for; shown in the snapshot, never probed elsewhere. */
+  /** runtime.sock the driver was built for; shown in the snapshot, never probed elsewhere. */
   endpoint: string;
   /**
    * App-owned directory for the instance lock and diagnostics exports. The shell passes its userData
@@ -27,7 +27,7 @@ export interface AppConfig {
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
-  endpoint: DEFAULT_CONTROL_ENDPOINT,
+  endpoint: DEFAULT_RUNTIME_ENDPOINT,
   dataDir: path.join(os.tmpdir(), 'wechat-agent'),
   lockPath: null,
   reconnect: { baseMs: 1_000, maxMs: 60_000 },

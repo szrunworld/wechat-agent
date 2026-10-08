@@ -4,7 +4,7 @@ export type SnapshotKey =
   | 'platform_offline' | 'incompatible' | 'unpaired' | 'account_unconfirmed' | 'ready_idle' | 'waiting_approval'
   | 'executing' | 'stopping' | 'quiescence_unconfirmed' | 'unknown_result' | 'ambiguous_identity' | 'approval_expired' | 'coverage_partial';
 
-const ENDPOINT = '~/Library/Application Support/AgentDesktop/control.sock';
+const ENDPOINT = '~/Library/Application Support/AgentDesktop/runtime.sock';
 const T = '2026-10-08T10:20:00+08:00';
 
 export function emptyFeatures(reason: Exclude<FeatureState, { enabled: true }>['reason']): Record<FeatureKey, FeatureState> {
@@ -37,7 +37,7 @@ const acceptTask = (over: Partial<TaskView>): TaskView => ({
 });
 
 export const sampleSnapshots: Record<SnapshotKey, AppSnapshot> = {
-  platform_offline: base({ connection: { state: 'disconnected', endpoint: ENDPOINT, missingCapabilities: [], steps: steps(0, 'discover', '未找到 AgentDesktop（control.sock 不存在）') }, account: null, inputGate: 'closed', features: emptyFeatures('platform_offline'), patrol: { enabled: false, intervalSeconds: 60 } }),
+  platform_offline: base({ connection: { state: 'disconnected', endpoint: ENDPOINT, missingCapabilities: [], steps: steps(0, 'discover', '未找到 AgentDesktop（runtime.sock 不存在）') }, account: null, inputGate: 'closed', features: emptyFeatures('platform_offline'), patrol: { enabled: false, intervalSeconds: 60 } }),
   incompatible: base({ connection: { state: 'incompatible', endpoint: ENDPOINT, product: 'AgentDesktop', apiVersion: 'agentdesktop.runtime/2', missingCapabilities: ['act', 'observe'], steps: steps(1, 'contract', '协议版本不匹配：需要 agentdesktop.runtime/1') }, account: null, inputGate: 'closed', features: emptyFeatures('capability_missing') }),
   unpaired: base({ connection: { state: 'unpaired', endpoint: ENDPOINT, product: 'AgentDesktop', apiVersion: 'agentdesktop.runtime/1', principal: { clientId: 'local:501', role: 'owner' }, missingCapabilities: [], steps: steps(2) }, account: null, inputGate: 'closed', features: { ...emptyFeatures('pairing_missing'), read_list: { enabled: true } } }),
   account_unconfirmed: base({ connection: { ...base({}).connection, steps: steps(4) }, account: { accountId: 'acct_a', visibleLabel: '（待确认）', evidenceIds: ['ev_1'], confirmedAt: T, revision: 0, status: 'unconfirmed' }, inputGate: 'closed', features: { ...emptyFeatures('account_unconfirmed'), read_list: { enabled: true } } }),
