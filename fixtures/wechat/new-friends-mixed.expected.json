@@ -1,0 +1,69 @@
+{
+  "scene": "new-friends-mixed",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "request_detail",
+  "coverage": "end_confirmed",
+  "requests": [
+    {
+      "name": "林小雨",
+      "note": "我是林小雨，想认识一下",
+      "status": "pending",
+      "actionRect": true
+    },
+    {
+      "name": "王大为",
+      "note": "来自群聊「合成测试群」",
+      "status": "added",
+      "actionRect": false
+    },
+    {
+      "name": "张小明",
+      "note": "我是张小明",
+      "status": "expired",
+      "actionRect": false
+    },
+    {
+      "name": "李晓华",
+      "note": "你好，请通过",
+      "status": "waiting_verification",
+      "actionRect": false
+    },
+    {
+      "name": "赵六",
+      "note": "朋友推荐",
+      "status": "rejected",
+      "actionRect": false
+    },
+    {
+      "name": "林小雨",
+      "note": "另一位同名的申请",
+      "status": "added",
+      "actionRect": false
+    },
+    {
+      "name": "昵称特别长的合成…",
+      "note": "长昵称被列表截断",
+      "status": "added",
+      "actionRect": false
+    }
+  ],
+  "detail": {
+    "name": "林小雨",
+    "wechatId": "wxid_synthetic01",
+    "region": "中国大陆",
+    "message": "我是林小雨，想认识一下"
+  },
+  "buttonsInclude": [
+    "通过验证",
+    "接受"
+  ],
+  "warningsInclude": [
+    "duplicate name \"林小雨\"",
+    "cut short"
+  ]
+}

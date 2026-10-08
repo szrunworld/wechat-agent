@@ -1,0 +1,26 @@
+name: ci
+on:
+  push:
+    branches: [main, app-skeleton]
+  pull_request:
+jobs:
+  check:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: scripts/check-bans.sh
+      - run: npm run build:ocr
+      - run: npm run typecheck
+      - run: npm test
+      - name: lane ownership
+        if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'lane-')
+        run: |
+          lane="${GITHUB_HEAD_REF#lane-}"
+          git fetch origin "${GITHUB_BASE_REF}"
+          scripts/check-ownership.sh "$lane" "origin/${GITHUB_BASE_REF}"

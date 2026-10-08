@@ -1,0 +1,23 @@
+{
+  "name": "@wechat-agent/desktop-main",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lane G: Electron main process, preload whitelist, menu bar, packaging",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts",
+    "build": "node build.mjs",
+    "start": "npm run build && electron .",
+    "prepackage": "npm run build && node ../../../packaging/prepare.mjs",
+    "package": "electron-builder --config ../../../packaging/electron-builder.yml --mac --dir",
+    "package:dmg": "npm run prepackage && electron-builder --config ../../../packaging/electron-builder.yml --mac dmg"
+  },
+  "devDependencies": {
+    "@wechat-agent/ports": "*",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2"
+  }
+}

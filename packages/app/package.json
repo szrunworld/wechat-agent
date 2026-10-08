@@ -1,0 +1,13 @@
+{
+  "name": "@wechat-agent/app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lane E: application service, dispatcher, policy gate, input gate, recovery, patrol",
+  "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": { "@wechat-agent/ports": "*" }
+}

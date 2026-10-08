@@ -1,0 +1,19 @@
+{
+  "name": "@wechat-agent/integration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lane H: integration vertical slice, fault matrix, ADR regressions, acceptance record lint",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@wechat-agent/ports": "*",
+    "@wechat-agent/driver": "*",
+    "@wechat-agent/ledger": "*",
+    "@wechat-agent/recognition": "*",
+    "@wechat-agent/handlers": "*",
+    "@wechat-agent/app": "*"
+  }
+}

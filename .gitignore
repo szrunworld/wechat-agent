@@ -1,2 +1,8 @@
 node_modules/
-ocr/ocr
+legacy/ocr/ocr
+packages/recognition/ocr/ocr
+dist/
+out/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

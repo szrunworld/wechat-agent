@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WeChat Agent</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main>
+  <header>
+    <h1>WeChat Agent</h1>
+    <p class="note">占位页（lane G）：lane F 的 W01 就绪后替换。下面是主进程通过 preload 推送的快照。</p>
+  </header>
+  <section aria-labelledby="conn-h">
+    <h2 id="conn-h">连接</h2>
+    <dl>
+      <dt>状态</dt><dd id="conn-state">—</dd>
+      <dt>端点</dt><dd id="conn-endpoint">—</dd>
+      <dt>协议</dt><dd id="conn-api">—</dd>
+      <dt>输入门</dt><dd id="gate">—</dd>
+      <dt>快照版本</dt><dd id="revision">—</dd>
+    </dl>
+  </section>
+  <section aria-labelledby="steps-h">
+    <h2 id="steps-h">建立步骤</h2>
+    <ol id="steps"></ol>
+  </section>
+  <section aria-labelledby="bridge-h">
+    <h2 id="bridge-h">桥接自检</h2>
+    <p id="bridge">—</p>
+    <p id="bridge-call">—</p>
+    <p id="bridge-deny">—</p>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

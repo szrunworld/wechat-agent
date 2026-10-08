@@ -1,0 +1,14 @@
+{
+  "scene": "light-theme",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "unknown",
+  "coverage": "unreadable",
+  "warningsInclude": [
+    "theme_mismatch"
+  ]
+}

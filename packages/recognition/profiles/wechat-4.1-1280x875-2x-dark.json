@@ -1,0 +1,57 @@
+{
+  "$comment": "Profile 1: WeChat 4.1.x for Mac filling a 1280x900 screen (window 1280x875 points), 2x capture (2560x1750 px), dark theme. Layout numbers are POINTS measured on that setup (legacy/src/parse.ts); the recognizer multiplies by `scale` to get image pixels. Items marked estimated were not measured and must be checked on a real capture by the coordinator.",
+  "profileId": "wechat-4.1-1280x875-2x-dark",
+  "revision": 1,
+  "app": "wechat-mac",
+  "appVersionRange": "4.1.x",
+  "window": { "width": 1280, "height": 875 },
+  "scale": 2,
+  "theme": "dark",
+  "sizeTolerancePoints": 2,
+  "layout": {
+    "rail": { "x": 0, "y": 0, "w": 58, "h": 875, "chats": { "x": 29, "y": 122 }, "contacts": { "x": 29, "y": 170 } },
+    "search": { "x": 179, "y": 27, "clearX": 273 },
+    "sidebar": { "x": 61, "y": 50, "w": 240, "h": 825 },
+    "sectionHeaderX": 75,
+    "newFriendsHeader": { "x": 113, "y": 122 },
+    "pane": { "x": 300, "y": 0, "w": 980, "h": 875 },
+    "request": { "nameX": 133, "statusX": 250, "rowHeight": 69, "noteOffset": 24 },
+    "chat": { "nameX": 118, "timeX": 230, "rowHeight": 68, "badgeX": 262 },
+    "conversation": {
+      "$comment": "estimated, not measured",
+      "titleMaxY": 60,
+      "bubbleTop": 60,
+      "input": { "x": 300, "y": 720, "w": 980, "h": 155 },
+      "avatarInset": 70
+    },
+    "theme": {
+      "$comment": "Background strips that hold no text in either list or conversation: the rail below its icons, and the pane's outer edges.",
+      "samples": [
+        { "x": 4, "y": 300, "w": 50, "h": 400 },
+        { "x": 301, "y": 90, "w": 6, "h": 600 },
+        { "x": 1273, "y": 90, "w": 6, "h": 600 }
+      ],
+      "darkMaxLuma": 90,
+      "lightMinLuma": 170
+    },
+    "scrollbar": { "$comment": "estimated: thumb strip at the sidebar's right edge", "x": 294, "w": 6, "minRunPoints": 30, "minLuma": 70 }
+  },
+  "vocabulary": {
+    "statuses": {
+      "已添加": "added",
+      "已过期": "expired",
+      "等待验证": "waiting_verification",
+      "已发送": "waiting_verification",
+      "已拒绝": "rejected",
+      "已忽略": "rejected",
+      "接受": "pending"
+    },
+    "endMarkers": ["没有更多", "暂无新的朋友", "没有新的朋友", "以上是全部", "暂无好友申请"],
+    "buttons": ["接受", "通过验证", "添加到通讯录", "发消息", "完成", "确定", "发送", "取消", "前往验证", "知道了", "好", "确认"],
+    "sectionHeaders": ["新的朋友", "群聊", "联系人", "公众号", "企业微信联系人", "服务号", "标签"],
+    "addFriendCues": ["发送添加朋友申请", "申请添加朋友", "添加朋友"],
+    "searchCues": ["网络查找", "查找手机/微信号", "搜索结果", "搜一搜"],
+    "requestDetailCues": ["验证消息", "验证信息", "通过验证", "前往验证", "对方消息"],
+    "contactDetailCues": ["微信号", "发消息"]
+  }
+}

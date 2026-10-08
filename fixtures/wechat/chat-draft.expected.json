@@ -1,0 +1,20 @@
+{
+  "scene": "chat-draft",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "chat",
+  "bubbles": [
+    {
+      "side": "other",
+      "text": "你好，在吗？"
+    }
+  ],
+  "inputBox": {
+    "empty": false,
+    "text": "还没发出去的草稿"
+  }
+}

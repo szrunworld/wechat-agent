@@ -1,0 +1,30 @@
+{
+  "name": "@wechat-agent/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lane F: React renderer for the six screens; talks only to window.wechatAgent (ApplicationService shape)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "acceptance:render": "tsx scripts/render-acceptance.ts"
+  },
+  "dependencies": {
+    "@wechat-agent/ports": "*",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10",
+    "@testing-library/react": "^16",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5",
+    "jsdom": "^27",
+    "playwright-core": "^1.57",
+    "vite": "^7",
+    "vitest": "^5"
+  }
+}

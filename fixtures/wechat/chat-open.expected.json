@@ -1,0 +1,53 @@
+{
+  "scene": "chat-open",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "chat",
+  "chats": [
+    {
+      "name": "林小雨",
+      "time": "20:19",
+      "unread": true
+    },
+    {
+      "name": "合成测试群",
+      "time": "昨天 14:07",
+      "unread": false
+    },
+    {
+      "name": "文件传输助手",
+      "time": "星期日",
+      "unread": false
+    },
+    {
+      "name": "张小明",
+      "time": "10/06",
+      "unread": true
+    }
+  ],
+  "bubbles": [
+    {
+      "side": "other",
+      "text": "你好，在吗？"
+    },
+    {
+      "side": "self",
+      "text": "在的"
+    },
+    {
+      "side": "other",
+      "text": "你好，在吗？"
+    },
+    {
+      "side": "self",
+      "text": "在的"
+    }
+  ],
+  "inputBox": {
+    "empty": true
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@wechat-agent/recognition",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lane C: WeChat screen recognition from artifact images (OCR + versioned layout profiles)",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts",
+    "build:ocr": "swiftc -O ocr/ocr.swift -o ocr/ocr",
+    "fixtures:render": "scripts/render-fixtures.sh",
+    "test:pure": "tsx --test test/analyze.test.ts test/png.test.ts test/t11-identity.test.ts test/t13-unreadable.test.ts test/t14-coverage.test.ts test/t15-green.test.ts test/t26-bubbles.test.ts"
+  },
+  "dependencies": {
+    "@wechat-agent/ports": "*"
+  }
+}

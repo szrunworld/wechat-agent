@@ -1,0 +1,31 @@
+{
+  "scene": "new-friends-green-selected",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "new_friends",
+  "coverage": "end_confirmed",
+  "requests": [
+    {
+      "name": "林小雨",
+      "status": "added",
+      "actionRect": false
+    },
+    {
+      "name": "王大为",
+      "status": "unknown",
+      "actionRect": false
+    },
+    {
+      "name": "张小明",
+      "status": "pending",
+      "actionRect": true
+    }
+  ],
+  "warningsInclude": [
+    "not treated as pending"
+  ]
+}
