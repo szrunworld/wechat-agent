@@ -54,6 +54,27 @@ test('a fault can drop the connection before the receipt', async () => {
   await assert.rejects(driver.showRequest('rq_x'), (e: unknown) => e instanceof DriverError && e.error.code === 'connection_lost');
 });
 
+test('dropping the connection ends the runs it owned, as a Delegated run must', async () => {
+  const driver = new FakeDriver({ endRunsOnDrop: true });
+  await driver.connect();
+  const session = await driver.openSession('desk_fake');
+  const idle = await driver.startRun(session.sessionId);
+  driver.dropConnection();
+  await driver.connect();
+  const after = await driver.showRun(idle.runId);
+  assert.equal(after.phase, 'ended');
+  assert.equal(after.quiescence, 'confirmed');
+  assert.equal(after.outcome, 'cancelled');
+  assert.equal(after.closingReason, 'connection_lost');
+  const busy = new FakeDriver({ endRunsOnDrop: true, faults: [{ method: 'act', error: { code: 'connection_lost', phase: 'transport', retryable: false, notSent: false }, disconnect: true }] });
+  await busy.connect();
+  const s2 = await busy.openSession('desk_fake');
+  const run2 = await busy.startRun(s2.sessionId);
+  await assert.rejects(busy.act({ sessionId: s2.sessionId, runId: run2.runId }, { snapshotId: 's', action: { kind: 'key', key: 'return' } }, 'rq_drop'));
+  await busy.connect();
+  assert.equal((await busy.showRun(run2.runId)).outcome, 'unknown');
+});
+
 test('the fake recognizer hands out scripted facts and marks nothing readable past them', async () => {
   const recognizer = new FakeRecognizer([pageFacts({ page: 'new_friends', requests: [] })]);
   const image = { width: 2560, height: 1750, scale: 2 };

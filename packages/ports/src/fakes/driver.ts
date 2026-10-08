@@ -26,6 +26,12 @@ export interface FakeDriverOptions {
   artifacts?: Record<Id, Uint8Array>;
   /** How cancelRun answers: confirmed (default) ends the run at once; pending leaves it stopping until confirmQuiescence(). */
   cancel?: { quiescence: 'pending' | 'confirmed' };
+  /**
+   * On dropConnection() or a disconnect fault, end every run the connection
+   * owned as the platform does for a Delegated run (ADR v2.2). Off by default:
+   * older tests settle runs themselves with confirmQuiescence().
+   */
+  endRunsOnDrop?: boolean;
 }
 
 const now = () => new Date().toISOString();
@@ -55,7 +61,7 @@ export class FakeDriver implements AgentDesktopDriver {
     this.counters.set(method, n);
     for (const fault of this.options.faults ?? []) {
       if (fault.method === method && (fault.onCall ?? 1) === n) {
-        if (fault.disconnect) this.state = 'disconnected';
+        if (fault.disconnect) this.dropConnection();
         throw new DriverError({ message: fault.error.code, phase: 'request', retryable: false, ...fault.error });
       }
     }
@@ -254,9 +260,20 @@ export class FakeDriver implements AgentDesktopDriver {
     return stream;
   }
 
-  /** Test helper: a disconnected control connection; subsequent calls throw connection_lost. */
+  /**
+   * Test helper: the control connection is gone. Subsequent calls throw
+   * connection_lost, and every connection-scoped run the connection owned
+   * ends (ADR v2.2 Delegated run): outcome unknown when an action may be in
+   * flight, cancelled otherwise; input is quiescent once the platform stops.
+   */
   dropConnection(): void {
     this.state = 'disconnected';
+    if (!this.options.endRunsOnDrop) return;
+    for (const run of this.runs.values()) {
+      if (run.phase === 'ended') continue;
+      const inFlight = this.calls.at(-1)?.method === 'act' && !run.receipts.length;
+      Object.assign(run, { phase: 'ended', outcome: inFlight || run.unknownActions > 0 ? 'unknown' : 'cancelled', quiescence: 'confirmed', closingReason: 'connection_lost', revision: run.revision + 1, endedAt: now() });
+    }
   }
 
   countCalls(method: string): number {
