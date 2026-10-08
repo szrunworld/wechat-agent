@@ -1,0 +1,171 @@
+{
+  "checkedAt": "2026-10-08T11:54:56.609Z",
+  "contract": {
+    "dir": "/Users/kevinshi/orca/wechat-agent/contracts/agentdesktop-runtime-v1",
+    "files": [
+      {
+        "name": "errors.json",
+        "expected": "9c97396b61d2f7113a0b79d05b2028ae4711c374ce78fc2c3b599fb91241a942",
+        "actual": "9c97396b61d2f7113a0b79d05b2028ae4711c374ce78fc2c3b599fb91241a942",
+        "ok": true
+      },
+      {
+        "name": "methods.json",
+        "expected": "00c5e29bd877684b9cc0bafb0faad6df88ce604881c50c8a40a891490676d9f5",
+        "actual": "00c5e29bd877684b9cc0bafb0faad6df88ce604881c50c8a40a891490676d9f5",
+        "ok": true
+      },
+      {
+        "name": "runtime.schema.json",
+        "expected": "bcd3a9a2580dd15f618685811c25312c66684a532340a607a1b4f167092e947c",
+        "actual": "bcd3a9a2580dd15f618685811c25312c66684a532340a607a1b4f167092e947c",
+        "ok": true
+      },
+      {
+        "name": "service.schema.json",
+        "expected": "047161c25d619fdb85255d1ade3977a9551e02346ec923624fde1a4f45987561",
+        "actual": "047161c25d619fdb85255d1ade3977a9551e02346ec923624fde1a4f45987561",
+        "ok": true
+      }
+    ],
+    "ok": true
+  },
+  "endpoint": {
+    "configured": "/tmp/adt-wx/side.runtime.sock",
+    "resolved": "/tmp/adt-wx/side.runtime.sock",
+    "exists": true,
+    "isSocket": true
+  },
+  "wechat": {
+    "running": false,
+    "pids": [],
+    "bundleId": "com.tencent.xinWeChat"
+  },
+  "ready": false,
+  "reasons": [
+    "微信（WeChat.app 主进程）没有在运行"
+  ],
+  "warnings": [
+    "握手未返回 principal（冻结的 RuntimeIdentity 还没有 principal 字段）：只读步骤可做，外发保持 blocked"
+  ],
+  "runtime": {
+    "product": "AgentDesktop",
+    "productVersion": "0.1.0-dev",
+    "apiVersion": "agentdesktop.runtime/1",
+    "apiVersions": [
+      "agentdesktop.runtime/1"
+    ],
+    "instanceId": "rt_1bc7c37520ed454984254e1805b06418",
+    "pid": 61475,
+    "startedAt": "2026-10-08T11:54:48.401Z",
+    "endpoint": "/tmp/adt-wx/side.runtime.sock",
+    "principal": null,
+    "methods": [
+      "act",
+      "ai.connections.create",
+      "ai.connections.delete",
+      "ai.connections.disable",
+      "ai.connections.get",
+      "ai.connections.list",
+      "ai.connections.update",
+      "ai.credentials.rotate",
+      "ai.modelProfiles.create",
+      "ai.modelProfiles.delete",
+      "ai.modelProfiles.disable",
+      "ai.modelProfiles.get",
+      "ai.modelProfiles.list",
+      "ai.modelProfiles.update",
+      "ai.models.list",
+      "ai.models.refresh",
+      "ai.operations.cancel",
+      "ai.operations.get",
+      "ai.profiles.create",
+      "ai.profiles.default.get",
+      "ai.profiles.delete",
+      "ai.profiles.disable",
+      "ai.profiles.get",
+      "ai.profiles.list",
+      "ai.profiles.setDefault",
+      "ai.profiles.update",
+      "ai.tests.start",
+      "ai.usage.summary",
+      "app.launch",
+      "app.list",
+      "artifact.read",
+      "artifact.show",
+      "desktop.create",
+      "desktop.destroy",
+      "desktop.list",
+      "desktop.show",
+      "events.subscribe",
+      "events.unsubscribe",
+      "gui.runs.cancel",
+      "gui.runs.events",
+      "gui.runs.get",
+      "gui.runs.start",
+      "observe",
+      "request.show",
+      "run.attach",
+      "run.cancel",
+      "run.events",
+      "run.finish",
+      "run.list",
+      "run.show",
+      "run.start",
+      "run.wait",
+      "runtime.capabilities",
+      "runtime.enableInput",
+      "runtime.handshake",
+      "runtime.status",
+      "runtime.stopAll",
+      "session.close",
+      "session.open",
+      "session.show",
+      "wait",
+      "window.bind",
+      "window.list",
+      "window.unbind"
+    ],
+    "required": [
+      "act",
+      "artifact.read",
+      "artifact.show",
+      "desktop.list",
+      "events.subscribe",
+      "observe",
+      "request.show",
+      "run.cancel",
+      "run.finish",
+      "run.show",
+      "run.start",
+      "run.wait",
+      "runtime.capabilities",
+      "runtime.handshake",
+      "session.close",
+      "session.open",
+      "window.bind",
+      "window.list"
+    ],
+    "missing": [],
+    "permissions": {
+      "screenRecording": "granted",
+      "accessibility": "granted"
+    },
+    "features": [
+      "apps.list",
+      "windows.list",
+      "windows.titles"
+    ],
+    "status": {
+      "instanceId": "rt_1bc7c37520ed454984254e1805b06418",
+      "state": "running",
+      "startedAt": "2026-10-08T11:54:48.401Z",
+      "uptimeSeconds": 8.264,
+      "connections": 1,
+      "desktops": 0,
+      "sessions": 0,
+      "runs": 0,
+      "inputAdmission": "enabled"
+    }
+  }
+}

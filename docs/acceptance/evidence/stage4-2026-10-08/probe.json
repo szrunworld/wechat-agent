@@ -1,0 +1,172 @@
+{
+  "probe": "wechat-agent stage4-probe",
+  "at": "2026-10-08T11:55:05.400Z",
+  "endpoint": "/tmp/adt-wx/side.runtime.sock",
+  "note": "connection-level evidence only; no Desktop, window binding, observe or act. Not a substitute for A01–A04 on an authorized account.",
+  "steps": [
+    {
+      "id": "S1-1",
+      "title": "runtime.handshake: product, apiVersion, principal",
+      "result": "passed",
+      "detail": {
+        "product": "AgentDesktop",
+        "productVersion": "0.1.0-dev",
+        "apiVersion": "agentdesktop.runtime/1",
+        "instanceId": "rt_1bc7c37520ed454984254e1805b06418",
+        "endpoint": "/tmp/adt-wx/side.runtime.sock",
+        "build": {
+          "source": "dddc0db3345a41f32a061ef2009e622816f60726",
+          "builtAt": "2026-10-08T11:51:36Z"
+        },
+        "principal": null
+      }
+    },
+    {
+      "id": "S1-2",
+      "title": "principal is a paired app (CR01)",
+      "result": "blocked",
+      "detail": {
+        "role": null,
+        "note": "local owner: controlled development mode only; outbound stays blocked (hub.pairing.* reserved, PR3)"
+      }
+    },
+    {
+      "id": "S1-3",
+      "title": "runtime.capabilities covers the app core methods",
+      "result": "passed",
+      "detail": {
+        "apiVersion": "agentdesktop.runtime/1",
+        "methodCount": 64,
+        "missing": [],
+        "permissions": {
+          "screenRecording": "granted",
+          "accessibility": "granted"
+        },
+        "features": [
+          "apps.list",
+          "windows.list",
+          "windows.titles"
+        ]
+      }
+    },
+    {
+      "id": "S1-4",
+      "title": "runtime.status, desktop.list, window.list, run.list",
+      "result": "passed",
+      "detail": {
+        "status": {
+          "instanceId": "rt_1bc7c37520ed454984254e1805b06418",
+          "state": "running",
+          "startedAt": "2026-10-08T11:54:48.401Z",
+          "uptimeSeconds": 16.979,
+          "connections": 1,
+          "desktops": 0,
+          "sessions": 0,
+          "runs": 0,
+          "inputAdmission": "enabled"
+        },
+        "desktops": [],
+        "windowCount": 8,
+        "wechatWindows": [],
+        "runCount": 0
+      }
+    },
+    {
+      "id": "S1-5",
+      "title": "session.open → run.start (Run creation)",
+      "result": "blocked",
+      "detail": {
+        "reason": "no Desktop exists and desktop.create (a virtual display) is forbidden in Stage 4",
+        "desktopCount": 0
+      }
+    },
+    {
+      "id": "S2",
+      "title": "WeChat window identified by bundleId",
+      "result": "blocked",
+      "detail": {
+        "bundleId": "com.tencent.xinWeChat",
+        "found": 0,
+        "note": "WeChat is not running (no authorized test account)"
+      }
+    },
+    {
+      "id": "S1-6",
+      "title": "events.subscribe on its own connection; closing it keeps the control connection",
+      "result": "passed",
+      "detail": {
+        "cursor": 0,
+        "driverState": "connected",
+        "statusAfter": true
+      }
+    },
+    {
+      "id": "X-1",
+      "title": "run.start without a valid session is refused",
+      "result": "passed",
+      "detail": {
+        "error": {
+          "code": "not_found",
+          "phase": "handler",
+          "retryable": false,
+          "message": "no session ses_does_not_exist"
+        },
+        "runsAfter": 0
+      }
+    },
+    {
+      "id": "X-2",
+      "title": "request.show of an unknown requestId → not_found",
+      "result": "passed",
+      "detail": {
+        "error": {
+          "code": "not_found",
+          "phase": "handler",
+          "retryable": false,
+          "message": "no request rq_wechat_agent_probe_never_sent within the last 7 days"
+        }
+      }
+    },
+    {
+      "id": "X-3",
+      "title": "request deadline",
+      "result": "blocked",
+      "detail": {
+        "note": "the handshake answered within 1 ms; no timeout to observe"
+      }
+    },
+    {
+      "id": "X-4",
+      "title": "calls after the control connection is gone fail typed; no silent reconnect",
+      "result": "passed",
+      "detail": {
+        "error": {
+          "code": "connection_lost",
+          "phase": "transport",
+          "notSent": true,
+          "retryable": false,
+          "message": "control connection is not open (driver state: closed); call connect() first"
+        },
+        "state": "closed"
+      }
+    }
+  ],
+  "summary": {
+    "passed": [
+      "S1-1",
+      "S1-3",
+      "S1-4",
+      "S1-6",
+      "X-1",
+      "X-2",
+      "X-4"
+    ],
+    "failed": [],
+    "blocked": [
+      "S1-2",
+      "S1-5",
+      "S2",
+      "X-3"
+    ]
+  }
+}

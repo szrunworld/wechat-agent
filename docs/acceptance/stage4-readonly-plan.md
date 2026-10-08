@@ -1,5 +1,7 @@
 # 阶段 4 · 真机只读验收执行计划（A01–A04）
 
+> 2026-10-08 更新：平台基线改为 agentdesktop `main`（A2 单端点，`runtime.sock`）。首轮执行结果与剩余阻塞见 [`stage4-matrix.md`](stage4-matrix.md)。当前平台模型下 Desktop 只能由 `desktop.create`（虚拟显示器）创建，与“阶段 4 不创建虚拟显示器”冲突，S2–S4 待决定。
+
 依据 `docs/plan/00-parallel-work-plan.md` §5（阶段 4 = 真机只读基线，协调者在授权测试账号上做）、`docs/acceptance/README.md`（字段模板、别名、证据格式）、`steps/A01–A04.md`、ADR v2.2 §三（Delegated Run 的断连语义）。本文只是**执行计划与证据模板**；执行前所有 case 的 `result` 保持 `not_run`，本文不改任何 case。
 
 Mock 演练（同一条路径在 Fake Runtime 上先跑一遍）：`tests/integration/test/rehearsal.test.ts`；断连语义审查：`driver-disconnect-review.md` + `tests/integration/test/driver-disconnect.test.ts`；环境检查：`scripts/stage4-env-check.sh`。
