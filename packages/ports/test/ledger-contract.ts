@@ -83,6 +83,9 @@ export function runLedgerContract(open: () => Promise<Ledger>): void {
     await assert.rejects(ledger.recordReceipt(attempt.attemptId, 'r', {}, T1));
     const next = await ledger.prepareAttempt({ taskId: task.taskId, stepId: 'send' }, T1);
     assert.equal(next.attemptOrdinal, 2);
+    const listed = await ledger.listAttempts(task.taskId);
+    assert.deepEqual(listed.map((a) => [a.attemptOrdinal, a.state]), [[1, 'not_sent'], [2, 'prepared']]);
+    assert.deepEqual(await ledger.listAttempts('task_missing'), []);
     await ledger.close();
   });
 

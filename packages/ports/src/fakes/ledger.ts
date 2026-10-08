@@ -160,6 +160,10 @@ export class InMemoryLedger implements Ledger {
     return this.attempts.get(attemptId);
   }
 
+  async listAttempts(taskId: Id): Promise<ActionAttempt[]> {
+    return [...this.attempts.values()].filter((a) => a.taskId === taskId).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.attemptOrdinal - b.attemptOrdinal);
+  }
+
   async findOpenAttempts(): Promise<ActionAttempt[]> {
     return [...this.attempts.values()].filter((a) => a.state === 'dispatching' || a.state === 'receipt_received');
   }

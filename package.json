@@ -12,7 +12,8 @@
   "scripts": {
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "check": "scripts/check-bans.sh && npm run typecheck && npm test"
+    "build:ocr": "npm run build:ocr -w packages/recognition",
+    "check": "scripts/check-bans.sh && npm run build:ocr && npm run typecheck && npm test"
   },
   "devDependencies": {
     "@types/node": "^22",

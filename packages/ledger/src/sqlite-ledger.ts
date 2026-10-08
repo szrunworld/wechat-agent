@@ -412,6 +412,13 @@ export class SqliteLedger implements Ledger {
     return this.write('markUnknown', () => this.moveAttempt('markUnknown', attemptId, 'unknown', now, { unknown_reason: reason }));
   }
 
+  async listAttempts(taskId: Id): Promise<ActionAttempt[]> {
+    return this.read(() => {
+      const rows = this.db.prepare(`SELECT * FROM attempts WHERE task_id = ? ORDER BY created_at, attempt_ordinal`).all(taskId) as Row[];
+      return rows.map((row) => this.attemptFromRow(row));
+    });
+  }
+
   async getAttempt(attemptId: Id): Promise<ActionAttempt | undefined> {
     return this.read(() => {
       const row = this.attemptRow(attemptId);

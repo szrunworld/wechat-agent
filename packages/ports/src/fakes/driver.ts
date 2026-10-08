@@ -24,6 +24,8 @@ export interface FakeDriverOptions {
   principalRole?: 'owner' | 'paired';
   methods?: string[];
   artifacts?: Record<Id, Uint8Array>;
+  /** How cancelRun answers: confirmed (default) ends the run at once; pending leaves it stopping until confirmQuiescence(). */
+  cancel?: { quiescence: 'pending' | 'confirmed' };
 }
 
 const now = () => new Date().toISOString();
@@ -159,8 +161,18 @@ export class FakeDriver implements AgentDesktopDriver {
 
   async cancelRun(runId: Id): Promise<CancelReceipt> {
     this.record('cancelRun', runId);
-    const run = this.endRun(runId, 'cancelled');
-    return { cancelRequest: { accepted: true, scope: { kind: 'run', id: runId } }, execution: { phase: run.phase, quiescence: run.quiescence, outcome: run.outcome, revision: run.revision } };
+    const existing = this.runs.get(runId);
+    if (!existing) throw new DriverError({ code: 'not_found', message: runId, phase: 'handler', retryable: false });
+    const alreadyTerminal = existing.phase === 'ended';
+    const run = this.options.cancel?.quiescence === 'pending' && !alreadyTerminal
+      ? Object.assign(existing, { phase: 'stopping' as const, quiescence: 'pending' as const, revision: existing.revision + 1 })
+      : this.endRun(runId, 'cancelled');
+    return { cancelRequest: { accepted: true, scope: { kind: 'run', id: runId } }, execution: { phase: run.phase, quiescence: run.quiescence, outcome: run.outcome, revision: run.revision }, alreadyTerminal };
+  }
+
+  /** Test helper: a run left stopping by cancel { quiescence: 'pending' } reaches quiescence now. */
+  confirmQuiescence(runId: Id): Run {
+    return this.endRun(runId, 'cancelled');
   }
 
   async listRuns(): Promise<Run[]> {

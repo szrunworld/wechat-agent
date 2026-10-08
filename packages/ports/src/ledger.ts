@@ -78,6 +78,8 @@ export interface Ledger {
   /** dispatching → not_sent, only on a proven notSent error; the step may be planned again with a new attempt. */
   markNotSent(attemptId: Id, reason: string, now: Timestamp): Promise<ActionAttempt>;
   getAttempt(attemptId: Id): Promise<ActionAttempt | undefined>;
+  /** All attempts of a task, oldest first: reconciliation and TaskView.platform read requestIds from here. */
+  listAttempts(taskId: Id): Promise<ActionAttempt[]>;
   /** The platform receipt recordReceipt stored verbatim, for reconciliation. */
   getReceipt(attemptId: Id): Promise<Record<string, unknown> | undefined>;
   /** Attempts a crash left in dispatching/receipt_received: recovery queries them, never re-dispatches. */

@@ -15,6 +15,7 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: scripts/check-bans.sh
+      - run: npm run build:ocr
       - run: npm run typecheck
       - run: npm test
       - name: lane ownership

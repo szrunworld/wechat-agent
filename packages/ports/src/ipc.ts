@@ -26,8 +26,12 @@ export interface TaskView {
   revision: Revision;
   target?: { displayName: string; visibleIdentifier?: string; kind: string; confidence: number; evidenceIds: Id[]; /** The verification message of a friend request. */ message?: string };
   draft?: { text: string; revision: Revision; source: 'manual' | 'model' };
+  /** Set once a person approved (task.approve recorded it). Absent while waiting_approval. */
   approval?: { approvalId: Id; contentHash: string; expiresAt: Timestamp; consumed: boolean };
-  /** sha256 of the draft the app would ask approval for; the renderer must send this hash back, never its own. */
+  /**
+   * While waiting_approval: the sha256 the app computed over the content it asks approval for.
+   * The renderer sends exactly this hash to task.approve, never one of its own.
+   */
   pendingContentHash?: string;
   platform?: { runId?: Id; requestId?: Id; delivery?: string; execution?: string; quiescence?: string };
   facts: DomainFact[];

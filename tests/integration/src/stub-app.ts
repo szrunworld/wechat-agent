@@ -692,7 +692,7 @@ class StubApp implements Application {
       activeTask: this.activeRun ? views.find((v) => v.taskId === this.activeRun!.taskId) : undefined,
       tasks: views,
       features: this.features(),
-      policy: { allowlistCount: policy.allowlist.length, approvalPerAction: true, modelUpload: policy.modelUpload, patrolIntervalSeconds: policy.patrolIntervalSeconds },
+      policy: { allowlistCount: policy.allowlist.length, approvalPerAction: true, modelUpload: policy.modelUpload, patrolIntervalSeconds: policy.patrolIntervalSeconds, approvalTtlSeconds: 600, evidenceRetentionDays: 1 },
     };
   }
 
