@@ -152,6 +152,10 @@ export class InMemoryLedger implements Ledger {
     return this.moveAttempt(attemptId, 'unknown', now);
   }
 
+  async markNotSent(attemptId: Id, _reason: string, now: Timestamp): Promise<ActionAttempt> {
+    return this.moveAttempt(attemptId, 'not_sent', now);
+  }
+
   async getAttempt(attemptId: Id): Promise<ActionAttempt | undefined> {
     return this.attempts.get(attemptId);
   }

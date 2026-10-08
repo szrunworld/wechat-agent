@@ -24,9 +24,11 @@ export interface TaskView {
   state: TaskState;
   stateReason?: DomainReasonCode;
   revision: Revision;
-  target?: { displayName: string; visibleIdentifier?: string; kind: string; confidence: number; evidenceIds: Id[] };
+  target?: { displayName: string; visibleIdentifier?: string; kind: string; confidence: number; evidenceIds: Id[]; /** The verification message of a friend request. */ message?: string };
   draft?: { text: string; revision: Revision; source: 'manual' | 'model' };
   approval?: { approvalId: Id; contentHash: string; expiresAt: Timestamp; consumed: boolean };
+  /** sha256 of the draft the app would ask approval for; the renderer must send this hash back, never its own. */
+  pendingContentHash?: string;
   platform?: { runId?: Id; requestId?: Id; delivery?: string; execution?: string; quiescence?: string };
   facts: DomainFact[];
   timeline: { at: Timestamp; label: string }[];
@@ -52,7 +54,7 @@ export interface AppSnapshot {
   activeTask?: TaskView;
   tasks: TaskView[];
   features: Record<FeatureKey, FeatureState>;
-  policy: { allowlistCount: number; approvalPerAction: true; modelUpload: boolean; patrolIntervalSeconds: number };
+  policy: { allowlistCount: number; approvalPerAction: true; modelUpload: boolean; patrolIntervalSeconds: number; approvalTtlSeconds: number; evidenceRetentionDays: number };
 }
 
 export interface IpcMethods {
@@ -71,6 +73,8 @@ export interface IpcMethods {
   'task.reconcile': { params: { taskId: Id; expectedRevision: Revision }; result: TaskView };
   'task.concludeManually': { params: { taskId: Id; expectedRevision: Revision; conclusion: string; evidenceIds: Id[] }; result: TaskView };
   'window.requestHandback': { params: { operationId: string }; result: { mode: 'platform' | 'manual'; instructions?: string } };
+  /** Read-only: an evidence image for display, redacted by default; the app never hands out platform paths. */
+  'evidence.read': { params: { evidenceId: Id; redacted?: boolean }; result: { dataUrl: string; width: number; height: number; crop?: { x: number; y: number; width: number; height: number }; redacted: boolean; captureTime: Timestamp } };
   'diagnostics.export': { params: { includeEvidence: boolean; selectedEvidenceIds: Id[] }; result: { path: string; byteSize: number } };
 }
 
@@ -80,7 +84,7 @@ export type IpcMethod = keyof IpcMethods;
 export const IPC_METHODS: readonly IpcMethod[] = [
   'app.getSnapshot', 'connection.check', 'account.confirm', 'task.create', 'task.list', 'task.show', 'task.draft',
   'task.approve', 'task.skip', 'task.cancel', 'app.pause', 'app.resume', 'task.reconcile', 'task.concludeManually',
-  'window.requestHandback', 'diagnostics.export',
+  'window.requestHandback', 'diagnostics.export', 'evidence.read',
 ];
 
 export interface IpcError {

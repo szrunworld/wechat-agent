@@ -87,6 +87,8 @@ export interface PageFacts {
   requests?: RequestRow[];
   chats?: ChatRow[];
   detail?: DetailPane;
+  /** The open chat's title bar, on chat pages. */
+  conversation?: { title: string; rect: PixelRect };
   bubbles?: Bubble[];
   inputBox?: InputBox;
   buttons: ButtonHit[];

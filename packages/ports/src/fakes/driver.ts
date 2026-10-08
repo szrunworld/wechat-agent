@@ -83,7 +83,7 @@ export class FakeDriver implements AgentDesktopDriver {
     return {
       apiVersion: RUNTIME_API_VERSION,
       interface: { methods: methods.map((m) => ({ method: m, mutation: m === 'act' || m.startsWith('run.') || m.startsWith('window.') || m.startsWith('session.'), stage: 'P0' as const })) },
-      backend: { platform: { os: 'macos' }, permissions: { screenRecording: 'granted', accessibility: 'granted' }, features: {} },
+      backend: { platform: { os: 'macos' }, permissions: { screenRecording: 'granted', accessibility: 'granted' }, features: [] },
     };
   }
 

@@ -75,6 +75,8 @@ export interface Ledger {
   recordReceipt(attemptId: Id, receiptId: Id, receipt: Record<string, unknown>, now: Timestamp): Promise<ActionAttempt>;
   markVerified(attemptId: Id, now: Timestamp): Promise<ActionAttempt>;
   markUnknown(attemptId: Id, reason: string, now: Timestamp): Promise<ActionAttempt>;
+  /** dispatching → not_sent, only on a proven notSent error; the step may be planned again with a new attempt. */
+  markNotSent(attemptId: Id, reason: string, now: Timestamp): Promise<ActionAttempt>;
   getAttempt(attemptId: Id): Promise<ActionAttempt | undefined>;
   /** The platform receipt recordReceipt stored verbatim, for reconciliation. */
   getReceipt(attemptId: Id): Promise<Record<string, unknown> | undefined>;

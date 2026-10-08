@@ -87,6 +87,7 @@ async function driveAttempt(ledger: Ledger, taskId: string, target: AttemptState
   attempt = await ledger.markDispatching(attempt.attemptId, dispatch, T1);
   if (target === 'dispatching') return attempt;
   if (target === 'unknown') return ledger.markUnknown(attempt.attemptId, 'disconnected', T1);
+  if (target === 'not_sent') return ledger.markNotSent(attempt.attemptId, 'frame_too_large', T1);
   attempt = await ledger.recordReceipt(attempt.attemptId, 'rc', { phase: 'done' }, T1);
   if (target === 'receipt_received') return attempt;
   return ledger.markVerified(attempt.attemptId, T1);
@@ -96,12 +97,13 @@ async function step(ledger: Ledger, attempt: ActionAttempt, to: AttemptState): P
   if (to === 'dispatching') return ledger.markDispatching(attempt.attemptId, { requestId: 'rq_cut', canonicalDigest: 'd', snapshotId: 's', sessionId: 'ses', runId: 'run' }, T1);
   if (to === 'receipt_received') return ledger.recordReceipt(attempt.attemptId, 'rc_cut', { phase: 'done' }, T1);
   if (to === 'verified') return ledger.markVerified(attempt.attemptId, T1);
+  if (to === 'not_sent') return ledger.markNotSent(attempt.attemptId, 'cut', T1);
   return ledger.markUnknown(attempt.attemptId, 'cut', T1);
 }
 
 test('every attempt transition cut before commit leaves the attempt as it was, and the requestId is not burnt', async () => {
   const edges = Object.entries(ATTEMPT_TRANSITIONS).flatMap(([from, tos]) => tos.map((to) => [from as AttemptState, to] as const));
-  assert.equal(edges.length, 6);
+  assert.equal(edges.length, 7);
   for (const [from, to] of edges) {
     const path = tmpLedgerPath();
     const { ledger, cut } = await openCuttable(path);

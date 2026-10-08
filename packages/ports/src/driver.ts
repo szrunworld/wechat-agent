@@ -80,7 +80,7 @@ export interface Capabilities {
   backend: {
     platform: Record<string, unknown>;
     permissions: { screenRecording: string; accessibility: string };
-    features: Record<string, unknown>;
+    features: string[];
   };
 }
 
@@ -125,7 +125,7 @@ export interface ActionReceipt {
   businessResult?: 'not_evaluated';
   route: string | null;
   target: { generation: number; process: ProcessIdentity; windowId: number; elementRef: Id | null; point: { x: number; y: number } | null };
-  timing: { acceptedAt: Timestamp; dispatchedAt: Timestamp | null; completedAt: Timestamp | null };
+  timing: { acceptedAt: Timestamp; dispatchedAt: Timestamp; completedAt: Timestamp };
   reason?: { code: string; message: string };
 }
 
@@ -208,6 +208,7 @@ export interface AgentDesktopDriver {
   closeSession(sessionId: Id): Promise<Session>;
   /** A Delegated run: the driver never sends lifetime/ownership/origin (ADR-05). */
   startRun(sessionId: Id): Promise<Run>;
+  /** run.finish takes an exitCode on the wire: success → 0, failed → 1, cancelled → 130. */
   finishRun(runId: Id, outcome: 'success' | 'failed' | 'cancelled'): Promise<Run>;
   showRun(runId: Id): Promise<Run>;
   waitRun(runId: Id, timeoutMs: number): Promise<Run>;

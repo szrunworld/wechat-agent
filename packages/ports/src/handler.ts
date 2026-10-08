@@ -3,7 +3,7 @@
 // a context; it never reaches the platform or the disk any other way.
 
 import type {
-  AccountBinding, ActionKind, BusinessApproval, DomainResult, Id, Policy, Revision, TaskType, Timestamp, WeChatTask,
+  AccountBinding, ActionKind, BusinessApproval, DomainResult, Id, Policy, Revision, TargetRef, TaskType, Timestamp, WeChatTask,
 } from './domain.ts';
 import type { AgentDesktopDriver } from './driver.ts';
 import type { Ledger } from './ledger.ts';
@@ -51,6 +51,8 @@ export interface HandlerContext {
   ledger: Ledger;
   policy: Policy;
   account: AccountBinding;
+  /** The task's target as the app resolved it (conversation, request, search profile), when it has one. */
+  target?: TargetRef;
   writeGate: WriteGate;
   /** Platform session and run the app acquired for this task (方案 §09 step 5). */
   session: { desktopId: Id; sessionId: Id; runId: Id };

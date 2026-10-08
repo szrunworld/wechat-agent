@@ -36,13 +36,15 @@ export function canTransition(from: TaskState, to: TaskState): boolean {
 }
 
 /** One platform action on behalf of a task step (方案 §08 ActionAttempt). */
-export type AttemptState = 'prepared' | 'dispatching' | 'receipt_received' | 'verified' | 'unknown';
+export type AttemptState = 'prepared' | 'dispatching' | 'receipt_received' | 'verified' | 'unknown' | 'not_sent';
 
 export const ATTEMPT_TRANSITIONS: Readonly<Record<AttemptState, readonly AttemptState[]>> = {
   prepared: ['dispatching'],
-  dispatching: ['receipt_received', 'unknown'],
+  // not_sent only when the platform or transport proved the request never arrived (error.notSent === true).
+  dispatching: ['receipt_received', 'unknown', 'not_sent'],
   receipt_received: ['verified', 'unknown'],
   verified: [],
+  not_sent: [],
   // unknown is settled only by reconciliation, which appends facts; it never re-dispatches.
   unknown: ['verified'],
 };
@@ -155,7 +157,7 @@ export interface ActionAttempt {
 
 export type FactKind =
   | 'list_read' | 'request_read' | 'profile_read' | 'request_status' | 'friend_added'
-  | 'friend_request_sent' | 'message_sent' | 'input_mismatch' | 'platform_receipt'
+  | 'friend_request_sent' | 'message_sent' | 'draft_written' | 'input_mismatch' | 'platform_receipt'
   | 'quiescence' | 'reconciliation' | 'manual_conclusion';
 
 export interface DomainFact {

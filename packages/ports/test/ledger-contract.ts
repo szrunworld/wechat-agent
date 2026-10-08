@@ -72,6 +72,20 @@ export function runLedgerContract(open: () => Promise<Ledger>): void {
     await ledger.close();
   });
 
+  test('a proven not-sent dispatch ends the attempt without counting as open', async () => {
+    const ledger = await open();
+    const { task } = await ledger.intake(intake(), T0);
+    const attempt = await ledger.prepareAttempt({ taskId: task.taskId, stepId: 'send' }, T0);
+    await ledger.markDispatching(attempt.attemptId, { requestId: 'rq_ns', canonicalDigest: 'd', snapshotId: 's', sessionId: 'ses', runId: 'run' }, T1);
+    const notSent = await ledger.markNotSent(attempt.attemptId, 'frame_too_large', T1);
+    assert.equal(notSent.state, 'not_sent');
+    assert.deepEqual(await ledger.findOpenAttempts(), []);
+    await assert.rejects(ledger.recordReceipt(attempt.attemptId, 'r', {}, T1));
+    const next = await ledger.prepareAttempt({ taskId: task.taskId, stepId: 'send' }, T1);
+    assert.equal(next.attemptOrdinal, 2);
+    await ledger.close();
+  });
+
   test('quota: same intent reuses a reservation, limits block, held stays counted', async () => {
     const ledger = await open();
     const policy = { ...DEFAULT_POLICY, maxDaily: { send_friend_request: 1 } };

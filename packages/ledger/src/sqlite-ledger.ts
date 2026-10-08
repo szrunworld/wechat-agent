@@ -404,6 +404,10 @@ export class SqliteLedger implements Ledger {
     return this.write('markVerified', () => this.moveAttempt('markVerified', attemptId, 'verified', now));
   }
 
+  async markNotSent(attemptId: Id, reason: string, now: Timestamp): Promise<ActionAttempt> {
+    return this.write('markNotSent', () => this.moveAttempt('markNotSent', attemptId, 'not_sent', now, { not_sent_reason: reason }));
+  }
+
   async markUnknown(attemptId: Id, reason: string, now: Timestamp): Promise<ActionAttempt> {
     return this.write('markUnknown', () => this.moveAttempt('markUnknown', attemptId, 'unknown', now, { unknown_reason: reason }));
   }

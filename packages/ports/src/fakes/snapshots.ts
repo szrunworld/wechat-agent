@@ -26,13 +26,13 @@ const base = (over: Partial<AppSnapshot>): AppSnapshot => ({
   counts: { waitingApproval: 0, needsReconciliation: 0, confirmed: 3 },
   tasks: [],
   features: { read_list: { enabled: true }, accept_request: { enabled: true }, add_friend: { enabled: false, reason: 'capability_missing', detail: '前台弹层路由未提供（CR02）' }, reply_draft: { enabled: true }, send_message: { enabled: true }, handback: { enabled: false, reason: 'capability_missing', detail: '归还能力未验证（CR03）' } },
-  policy: { allowlistCount: 2, approvalPerAction: true, modelUpload: false, patrolIntervalSeconds: 60 },
+  policy: { allowlistCount: 2, approvalPerAction: true, modelUpload: false, patrolIntervalSeconds: 60, approvalTtlSeconds: 600, evidenceRetentionDays: 1 },
   ...over,
 });
 
 const acceptTask = (over: Partial<TaskView>): TaskView => ({
   taskId: 'task_1', type: 'accept_request', state: 'waiting_approval', revision: 3,
-  target: { displayName: '陈一', visibleIdentifier: 'example_id', kind: 'friend_request', confidence: 0.92, evidenceIds: ['ev_2'] },
+  target: { displayName: '陈一', visibleIdentifier: 'example_id', kind: 'friend_request', confidence: 0.92, evidenceIds: ['ev_2'], message: '我是陈一，我们刚讨论过项目。' },
   facts: [], timeline: [{ at: T, label: '发现申请' }, { at: T, label: '读取详情' }], createdAt: T, updatedAt: T, ...over,
 });
 

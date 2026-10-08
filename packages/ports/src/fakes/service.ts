@@ -30,6 +30,13 @@ export class FakeApplicationService implements ApplicationService {
       }
       case 'task.list':
         return { tasks: this.current.tasks } as IpcMethods[M]['result'];
+      case 'app.pause':
+      case 'app.resume': {
+        const gate = method === 'app.pause' ? 'closed' : 'open';
+        this.current = { ...this.current, revision: this.current.revision + 1, inputGate: gate };
+        for (const listener of this.listeners) listener(this.current);
+        return { inputGate: gate } as IpcMethods[M]['result'];
+      }
       case 'connection.check':
         return { state: this.current.connection.state, apiVersion: this.current.connection.apiVersion, methods: [], missingCapabilities: this.current.connection.missingCapabilities } as IpcMethods[M]['result'];
       default:
