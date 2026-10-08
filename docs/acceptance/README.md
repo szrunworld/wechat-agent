@@ -109,4 +109,4 @@ front matter 是扁平的 `key: value`（空值写 `""`）。lint 规则：
 | 竖切 | `task.create → waiting_approval`（`pendingContentHash` 为 app 算的 sha256，`approval` 缺席）→ `task.approve`（原样回传 hash）→ 重新 observe → 一次危险 act → 已添加 → `confirmed`；attempt 链全部 `verified`、requestId 互不相同、`findOpenAttempts` 为空、回执原样入库、`approval.consumed = true`；UI 自造的 hash 被拒后任务重新准备并以同一 hash 再次请求审批 | `real-stack.test.ts` 前两例 |
 | 基线 | `baselineOnConnect` 打开时，连接后先经 lane D 只读读取一次 新的朋友（act=0，step `baseline` done），之后的任务脚本正常 | `real-stack.test.ts` 末例 |
 
-已知未覆盖/未解决（阶段 3 范围内）：lane E 不写 outbox 事件（任务书未要求，lane H 的 stub 写过，归属待定）；`FakeDriver` 不会在断连时结束 connection_scoped Run，T08 由测试代替平台调用 `confirmQuiescence`；lane D 在危险 act 前的 `consumeApproval` 发生在 `checkSignal` 之前，暂停后晚到的续体可能已消费审批但不会 act（保守，不断言）。
+已知未覆盖/未解决（阶段 3 范围内）：Outbox 由 App core 写入并投递（PR #11，fake 与真 SQLite 双跑，含崩溃恢复）；`FakeDriver` 不会在断连时结束 connection_scoped Run，T08 由测试代替平台调用 `confirmQuiescence`；lane D 在危险 act 前的 `consumeApproval` 发生在 `checkSignal` 之前，暂停后晚到的续体可能已消费审批但不会 act（保守，不断言）。

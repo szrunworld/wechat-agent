@@ -39,7 +39,7 @@ test('writer: a terminal finalize enqueues one event whose payloadHash is sha256
   const ledger = new InMemoryLedger();
   const task = await seedTask(ledger);
   const writer = new OutboxWriter({ ledger, log });
-  assert.equal(writer.atomic, false, 'the fake has no atomic extension');
+  assert.equal(writer.atomic, true, 'the in-memory ledger implements transitionTaskWithOutbox since it entered the Ledger contract');
   let queued = await ledger.transitionTask(task.taskId, 'queued', 1, '2026-10-08T10:00:01+08:00');
   queued = await ledger.transitionTask(task.taskId, 'cancelled', queued.revision, '2026-10-08T10:00:02+08:00');
   // The writer's own finalize path, used by the dispatcher for every terminal transition.
