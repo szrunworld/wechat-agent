@@ -1,0 +1,14 @@
+{
+  "note": "Path prefixes each lane may change. Everything else is the coordinator's. {lane} expands to the lane letter.",
+  "shared": ["docs/lanes/lane-{lane}.md"],
+  "lanes": {
+    "a": ["packages/driver/"],
+    "b": ["packages/ledger/"],
+    "c": ["packages/recognition/", "fixtures/wechat/"],
+    "d": ["packages/handlers/"],
+    "e": ["packages/app/"],
+    "f": ["apps/desktop/renderer/"],
+    "g": ["apps/desktop/main/", "packaging/"],
+    "h": ["tests/integration/", "docs/acceptance/"]
+  }
+}

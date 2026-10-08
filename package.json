@@ -1,20 +1,25 @@
 {
   "name": "wechat-agent",
   "private": true,
-  "description": "Watch WeChat on a 2ndscreen agent screen, read it from pixels, and add friends with a person's approval",
+  "version": "0.1.0",
+  "description": "WeChat Agent: an independent macOS app that reads WeChat for Mac through the AgentDesktop runtime/1 contract and adds friends with a person's approval",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/desktop/*",
+    "tests/integration"
+  ],
   "scripts": {
-    "start": "tsx src/cli.ts",
-    "test": "tsx --test src/*.test.ts",
-    "typecheck": "tsc --noEmit",
-    "build:ocr": "swiftc -O ocr/ocr.swift -o ocr/ocr"
-  },
-  "dependencies": {
-    "openai": "^5"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "check": "scripts/check-bans.sh && npm run typecheck && npm test"
   },
   "devDependencies": {
     "@types/node": "^22",
     "tsx": "^4",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

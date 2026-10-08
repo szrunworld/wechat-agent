@@ -1,0 +1,12 @@
+{
+  "name": "@wechat-agent/renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lane F: React renderer for the six screens; talks only to window.wechatAgent (ApplicationService shape)",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": { "@wechat-agent/ports": "*" }
+}

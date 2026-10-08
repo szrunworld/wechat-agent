@@ -1,0 +1,15 @@
+{
+  "name": "@wechat-agent/ports",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Frozen interfaces between the WeChat Agent lanes, with minimal in-memory fakes. Changed only by the coordinator.",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./fakes": { "types": "./src/fakes/index.ts", "default": "./src/fakes/index.ts" }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts"
+  }
+}

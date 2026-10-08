@@ -1,0 +1,97 @@
+// The app's own durable facts (方案 §08): tasks, approvals, attempts, quota,
+// facts, evidence, outbox. Lane B implements it on SQLite; the in-memory
+// fake in ./fakes is the reference for behaviour.
+
+import type {
+  AccountBinding, ActionAttempt, ActionKind, BusinessApproval, DomainFact, Evidence, Id, OutboxEvent, Policy,
+  QuotaReservation, Revision, TaskPayload, TaskState, TaskType, Timestamp, WeChatTask,
+} from './domain.ts';
+
+export class LedgerConflictError extends Error {
+  constructor(readonly kind: 'operation_fingerprint' | 'revision' | 'approval' | 'attempt' | 'transition', message: string) {
+    super(message);
+    this.name = 'LedgerConflictError';
+  }
+}
+
+/** The ledger refuses writes (corrupt file, disk full, bad migration). Never swallowed into an empty database. */
+export class LedgerUnavailableError extends Error {
+  constructor(readonly reason: string) {
+    super(`ledger unavailable: ${reason}`);
+    this.name = 'LedgerUnavailableError';
+  }
+}
+
+export interface TaskIntake {
+  operationId: string;
+  fingerprint: string;
+  type: TaskType;
+  accountRevision: Revision;
+  targetId?: Id;
+  targetRevision?: Revision;
+  payload: TaskPayload;
+  payloadHash: string;
+  deadline?: Timestamp;
+}
+
+export interface TaskQuery { cursor?: string; limit?: number; states?: TaskState[]; types?: TaskType[] }
+
+export interface AttemptPrepare { taskId: Id; stepId: string; sessionId?: Id; runId?: Id }
+
+export type QuotaDecision =
+  | { ok: true; reservation: QuotaReservation }
+  | { ok: false; reason: 'daily_limit' | 'min_interval' | 'outside_hours' | 'action_not_allowed' };
+
+export interface LegacySuppression { key: string; sourceHash: string }
+
+export interface Ledger {
+  /** Same operationId + same fingerprint returns the existing task (created=false); a different fingerprint throws. */
+  intake(input: TaskIntake, now: Timestamp): Promise<{ task: WeChatTask; created: boolean }>;
+  getTask(taskId: Id): Promise<WeChatTask | undefined>;
+  listTasks(query?: TaskQuery): Promise<{ tasks: WeChatTask[]; next?: string }>;
+  /** Enforces TASK_TRANSITIONS and expectedRevision; writes an audit row in the same transaction. */
+  transitionTask(taskId: Id, to: TaskState, expectedRevision: Revision, now: Timestamp, reason?: string): Promise<WeChatTask>;
+
+  recordApproval(approval: Omit<BusinessApproval, 'approvalId' | 'consumedAt'>): Promise<BusinessApproval>;
+  /** Single use; throws LedgerConflictError('approval') when consumed, expired, or any revision/hash differs. */
+  consumeApproval(approvalId: Id, expected: { taskId: Id; contentHash: string; targetRevision: Revision; accountRevision: Revision }, now: Timestamp): Promise<BusinessApproval>;
+
+  /** Next ordinal for (taskId, stepId); state prepared. */
+  prepareAttempt(input: AttemptPrepare, now: Timestamp): Promise<ActionAttempt>;
+  /** prepared → dispatching with the requestId that will be sent; persisted before the platform call. */
+  markDispatching(attemptId: Id, dispatch: { requestId: Id; canonicalDigest: string; snapshotId: Id; sessionId: Id; runId: Id }, now: Timestamp): Promise<ActionAttempt>;
+  recordReceipt(attemptId: Id, receiptId: Id, receipt: Record<string, unknown>, now: Timestamp): Promise<ActionAttempt>;
+  markVerified(attemptId: Id, now: Timestamp): Promise<ActionAttempt>;
+  markUnknown(attemptId: Id, reason: string, now: Timestamp): Promise<ActionAttempt>;
+  getAttempt(attemptId: Id): Promise<ActionAttempt | undefined>;
+  /** Attempts a crash left in dispatching/receipt_received: recovery queries them, never re-dispatches. */
+  findOpenAttempts(): Promise<ActionAttempt[]>;
+
+  reserveQuota(input: { accountId: Id; actionKind: ActionKind; intentId: Id }, policy: Policy, now: Timestamp): Promise<QuotaDecision>;
+  consumeQuota(reservationId: Id): Promise<QuotaReservation>;
+  releaseQuota(reservationId: Id): Promise<QuotaReservation>;
+  /** For unknown outcomes: the reservation stays counted so the intent is not sent twice. */
+  holdQuota(reservationId: Id): Promise<QuotaReservation>;
+
+  appendFact(fact: Omit<DomainFact, 'factId'>): Promise<DomainFact>;
+  listFacts(taskId: Id): Promise<DomainFact[]>;
+  putEvidence(evidence: Omit<Evidence, 'evidenceId'>): Promise<Evidence>;
+  getEvidence(evidenceId: Id): Promise<Evidence | undefined>;
+
+  enqueueOutbox(event: Omit<OutboxEvent, 'eventId' | 'state'>): Promise<OutboxEvent>;
+  pendingOutbox(limit?: number): Promise<OutboxEvent[]>;
+  markOutbox(eventId: Id, state: 'delivered' | 'failed', retryAt?: Timestamp): Promise<OutboxEvent>;
+
+  getAccount(): Promise<AccountBinding | undefined>;
+  /** A new binding bumps the revision; approvals under the old revision stop matching. */
+  confirmAccount(binding: Omit<AccountBinding, 'revision'>, expectedRevision: Revision | undefined): Promise<AccountBinding>;
+  getPolicy(): Promise<Policy>;
+  setPolicy(policy: Omit<Policy, 'revision'>, expectedRevision: Revision): Promise<Policy>;
+
+  /** Old `handled` keys become suppressions only; they never create tasks or imply success. */
+  importLegacySuppressions(entries: LegacySuppression[], migratedAt: Timestamp): Promise<number>;
+  isSuppressed(key: string): Promise<boolean>;
+
+  health(): Promise<{ writable: boolean; reason?: string; schemaVersion: number }>;
+  close(): Promise<void>;
+}
