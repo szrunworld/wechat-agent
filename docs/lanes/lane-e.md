@@ -31,3 +31,23 @@
 - 完成后开 **draft PR** 到 `app-skeleton`，不要合并；PR 描述列：改了哪些文件、跑了什么命令和结果、T 用例状态、未完成项、INTERFACE REQUEST。
 - 别碰别的 lane 的目录，哪怕只是"顺手修一下"。
 
+
+## 进度记录（2026-10-08，协调者代为收尾）
+
+lane E 的后台 agent 在会话重启时中断，代码已完成：`packages/app/src/`（application、connector、dispatcher、features、gate、patrol、policy、recovery、tasks、diagnostics、lock、config、support）与 4 个测试文件，24 个用例通过；协调者按真实退出码复核 typecheck / test / bans / ownership 后提交。
+
+| 用例 | 状态 | 测试 |
+| --- | --- | --- |
+| T01 | passed（Fake） | connection.test.ts |
+| T03 | passed（Fake） | connection.test.ts |
+| T34 + 重连旧 Run 不恢复 | passed（Fake） | connection.test.ts |
+| T05 同意图唯一执行 | passed（Fake） | dispatch.test.ts |
+| T10 | passed（Fake） | dispatch.test.ts |
+| T28a/b | passed（Fake） | dispatch.test.ts |
+| T30 | passed（Fake） | dispatch.test.ts |
+| T31 暂停无晚到动作 | passed（Fake） | dispatch.test.ts |
+| T32 | passed（Fake） | stop.test.ts |
+| T33 | passed（Fake） | stop.test.ts |
+| 已取消任务的在途 handler 不能在 resume 后过写门 | passed（Fake） | stop.test.ts |
+
+未完成：agent 的最终报告缺失，INTERFACE REQUEST 以代码里的用法为准（协调者审查时未发现接口之外的调用）。
