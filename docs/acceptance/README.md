@@ -9,6 +9,8 @@
 | `cases/T01.md … T42.md` | 每条测试用例一个记录文件：front matter 是方案 §13 的全部字段，正文是条件/操作/预期/归属/关联测试 |
 | `steps/A01.md … A12.md` | 验收步骤：执行与记录、通过条件、证据、关联用例 |
 | `support-matrix.md` | 微信版本 × 缩放 × 主题 × 窗口尺寸的支持矩阵，初始全部 `not_tested` |
+| `stage4-readonly-plan.md` | 阶段 4 真机只读验收（A01–A04）的执行计划、异常步骤与证据模板；配套 `scripts/stage4-env-check.sh` 与 `tests/integration/test/rehearsal.test.ts` |
+| `driver-disconnect-review.md` | Delegated Run 断连语义审查（ADR v2.2 §三）：Driver / Fake Runtime / App 三层对照、偏差与修复；证据 `tests/integration/test/driver-disconnect.test.ts` |
 | `../../tests/integration/test/lint-acceptance.test.ts` | 记录 lint（`npm test -w tests/integration`） |
 
 ## 记录字段（方案 §13，每项必填，不得预写 pass）
