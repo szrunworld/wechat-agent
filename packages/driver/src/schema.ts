@@ -46,8 +46,19 @@ export const runtimeSchema: { $defs: Record<string, JsonSchema>; [k: string]: un
 export const methodsContract: MethodsContract = loadJson('methods.json');
 export const errorsContract: ErrorsContract = loadJson('errors.json');
 
-/** Implemented methods of the snapshot, by name. */
-export const METHODS: ReadonlyMap<string, MethodSpec> = new Map(methodsContract.methods.map((m) => [m.method, m]));
+/**
+ * The runtime/1 GUI surface this client may call, by name: the snapshot's
+ * implemented methods minus the platform's own service families. `ai.*`
+ * (model configuration, params in service.schema.json) belongs to the
+ * AgentDesktop UI, and `gui.runs.*` is transitional until unit.run; the
+ * WeChat Agent calls neither, so they are refused locally.
+ */
+const NOT_FOR_THIS_CLIENT = /^(ai|gui\.runs)\./;
+export const METHODS: ReadonlyMap<string, MethodSpec> = new Map(
+  methodsContract.methods.filter((m) => !NOT_FOR_THIS_CLIENT.test(m.method)).map((m) => [m.method, m]),
+);
+/** Every implemented method the snapshot lists, including the ones this client never calls. */
+export const ALL_IMPLEMENTED_METHODS: ReadonlyMap<string, MethodSpec> = new Map(methodsContract.methods.map((m) => [m.method, m]));
 /** Error codes of the snapshot, by code. */
 export const ERROR_CODES: ReadonlyMap<string, ErrorSpec> = new Map(errorsContract.codes.map((e) => [e.code, e]));
 
@@ -239,7 +250,11 @@ export function requestProblems(request: unknown): string[] {
   if (problems.length) return problems;
   const { method, params } = request as { method: string; params: unknown };
   const spec = METHODS.get(method);
-  if (!spec) return [`$.method: ${method} is not an implemented method of the snapshot`];
+  if (!spec) {
+    return [ALL_IMPLEMENTED_METHODS.has(method)
+      ? `$.method: ${method} is a platform service method this client does not call`
+      : `$.method: ${method} is not an implemented method of the snapshot`];
+  }
   return validator.errors(spec.params, params).map((p) => p.replace(/^\$/, '$.params'));
 }
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Lane A: AgentDesktop runtime/1 client over control.sock, and a fault-injecting Fake Runtime server",
+  "description": "Lane A: AgentDesktop runtime/1 client over runtime.sock, and a fault-injecting Fake Runtime server",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

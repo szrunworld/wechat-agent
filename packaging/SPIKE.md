@@ -30,11 +30,11 @@
 
 - 发行形态是 Developer ID + Hardened Runtime + 公证（`electron-builder.yml: mac.type: distribution, hardenedRuntime: true`），entitlements 只有 Electron JIT 需要的四项（见 `entitlements.mac.plist`），**没有** `com.apple.security.app-sandbox`。
 - 为什么不能开 App Sandbox：
-  1. 要连 AgentDesktop 的 Unix socket `~/Library/Application Support/AgentDesktop/control.sock`。App Sandbox 下进程只能访问自己的容器 `~/Library/Containers/<id>/Data`，别的 Application Support 目录里的 socket 连不上（需要对方放到 app group 容器或走 XPC/Mach service，平台侧没有这个承诺）。
+  1. 要连 AgentDesktop 的 Unix socket `~/Library/Application Support/AgentDesktop/runtime.sock`。App Sandbox 下进程只能访问自己的容器 `~/Library/Containers/<id>/Data`，别的 Application Support 目录里的 socket 连不上（需要对方放到 app group 容器或走 XPC/Mach service，平台侧没有这个承诺）。
   2. 要 `execFile` 包内的 OCR helper；App Sandbox 下子进程继承沙盒，helper 读 artifact 图片的路径也必须在容器内。
   3. 不进 Mac App Store，没有必须开 App Sandbox 的理由。
 - 实测（打包态、spike 模式、`measure-startup.sh` 起一个临时 Unix socket 服务）：主进程 `net.connect(path)` 连接 + 一次往返 **4–7 ms**，三次全部 `pong`；`execFile(Resources/helpers/ocr, [截图])` 成功，Vision 识别占位页 24 段文字，耗时 1.4–2.9 s（accurate 模式、首次加载模型）。
-- 一个真实的坑：macOS `sun_path` 上限 **104 字节**。测试时把 socket 放在 `$TMPDIR/Library/Application Support/AgentDesktop/control.sock`（约 110 字节）会出现 listen `EADDRINUSE` / connect `EINVAL` 这种误导性的错误。真实端点 `/Users/<user>/Library/Application Support/AgentDesktop/control.sock` 在 68 字节左右，不受影响；但 lane A 的 Driver 若允许自定义端点，应校验长度并给出明确错误。
+- 一个真实的坑：macOS `sun_path` 上限 **104 字节**。测试时把 socket 放在 `$TMPDIR/Library/Application Support/AgentDesktop/runtime.sock`（约 110 字节）会出现 listen `EADDRINUSE` / connect `EINVAL` 这种误导性的错误。真实端点 `/Users/<user>/Library/Application Support/AgentDesktop/runtime.sock` 在 68 字节左右，不受影响；但 lane A 的 Driver 若允许自定义端点，应校验长度并给出明确错误。
 - Electron 自己的用户数据固定在 `~/Library/Application Support/WeChat Agent/`（`app.setPath('userData')`），账本放这里；`verify-install.sh` 证明升级/重装不动它。
 
 ### 2.3 Helper 执行与签名可行性

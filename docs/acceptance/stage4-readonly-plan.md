@@ -9,7 +9,7 @@ Mock 演练（同一条路径在 Fake Runtime 上先跑一遍）：`tests/integr
 | 前提 | 来源 | 未满足时 |
 | --- | --- | --- |
 | 授权测试账号（`testAccountAlias`）与授权测试联系人（`targetAlias`）由 Kevin 提供，授权证据按 README 归档为 `authorizationEvidenceId` | Kevin | 全部步骤记 `blocked`，不执行 |
-| AgentDesktop 发行分支在跑，`~/Library/Application Support/AgentDesktop/control.sock` 存在（冻结端点，不做回退探测） | `scripts/stage4-env-check.sh` | 不开始；端点若在发行分支上仍是 `runtime.sock`，先由协调者确认发行分支，不在 App 里加探测 |
+| AgentDesktop 发行分支在跑，`~/Library/Application Support/AgentDesktop/runtime.sock` 存在（宿主唯一 runtime/1 端点，A2；不做回退探测） | `scripts/stage4-env-check.sh` | 不开始；端点若在发行分支上仍是 `runtime.sock`，先由协调者确认发行分支，不在 App 里加探测 |
 | 契约快照 `contracts/agentdesktop-runtime-v1/SHA256SUMS` 与平台发行分支契约一致 | env-check 校验本地快照；与发行分支比对由协调者手工 `shasum -a 256` | 记 A01 失败原因，不开始 |
 | 微信 for Mac 已由**人**登录测试账号、停在主界面；本 App 不启动、不移动、不点击它 | `ps` 看进程 | 不开始 |
 | 识别 profile 适用：微信 4.1 · 1280×875 · 2x · 深色（lane C profile 1）；其他组合在 A05 另记 | `support-matrix.md` | `unreadable` → 记 blocked(layout_unreadable) |
@@ -17,7 +17,7 @@ Mock 演练（同一条路径在 Fake Runtime 上先跑一遍）：`tests/integr
 
 ### 身份：受控开发模式（开发例外，不是正式认证方式）
 
-CR01（paired principal / grants / 撤销）未落地。阶段 4 用**本机 owner 身份**连接 `control.sock`：握手回包里 `principal` 缺席或 `role=owner`，App 的连接状态是 `unpaired`，`pairing` 步骤显示 `blocked`，所有外发功能（接受/加好友/发消息）`enabled=false, reason=pairing_missing`，只有 `read_list` 可用。这是**开发例外**：
+CR01（paired principal / grants / 撤销）未落地。阶段 4 用**本机 owner 身份**连接 `runtime.sock`：握手回包里 `principal` 缺席或 `role=owner`，App 的连接状态是 `unpaired`，`pairing` 步骤显示 `blocked`，所有外发功能（接受/加好友/发消息）`enabled=false, reason=pairing_missing`，只有 `read_list` 可用。这是**开发例外**：
 
 - 只允许协调者本人、本机、授权测试账号使用；不写入任何 App 配置、不出现在发行文档；
 - 不是 CR01 的配对身份，不能作为 A03（配对权限）的证据；A03 在 CR01 落地前整体 `blocked`；
@@ -34,7 +34,7 @@ scripts/stage4-env-check.sh            # 人读
 scripts/stage4-env-check.sh --json > <本地证据目录>/stage4/env-check-<时间>.json
 ```
 
-只读：校验契约快照 sha256、`control.sock` 是否存在且是 socket、`runtime.handshake / runtime.capabilities / runtime.status`（打印 product、productVersion、apiVersion(s)、instanceId、principal、方法集合、相对 App 需要的 18 个方法的缺失、权限、`inputAdmission`）、`ps` 看微信主进程。不调 `window.*`、`session.*`、`run.*`、`observe`、`act`。输出 `READY` / `NOT READY` + 原因；AgentDesktop 没在跑时报告 `runtime_offline`，不是崩溃。退出码 0 = ready，1 = not ready。
+只读：校验契约快照 sha256、`runtime.sock` 是否存在且是 socket、`runtime.handshake / runtime.capabilities / runtime.status`（打印 product、productVersion、apiVersion(s)、instanceId、principal、方法集合、相对 App 需要的 18 个方法的缺失、权限、`inputAdmission`）、`ps` 看微信主进程。不调 `window.*`、`session.*`、`run.*`、`observe`、`act`。输出 `READY` / `NOT READY` + 原因；AgentDesktop 没在跑时报告 `runtime_offline`，不是崩溃。退出码 0 = ready，1 = not ready。
 
 要确认：契约三个文件 sha256 全部 `ok`；`product=AgentDesktop`，`apiVersions ∋ agentdesktop.runtime/1`；`missing: (none)`；`screenRecording=granted accessibility=granted`；`inputAdmission=enabled`；微信 `running`。`principal.role=owner` 会打 warning（受控开发模式），不阻断只读。
 

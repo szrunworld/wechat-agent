@@ -15,9 +15,9 @@ USERDATA="$(mktemp -d)/WeChat Agent"
 # answers "ping" with "pong". Kept under /tmp on purpose: sun_path is at most
 # 104 bytes on macOS and $TMPDIR/Library/Application Support/... exceeds it
 # (listen fails with EADDRINUSE, connect with EINVAL). The real endpoint,
-# ~/Library/Application Support/AgentDesktop/control.sock, is well under.
+# ~/Library/Application Support/AgentDesktop/runtime.sock, is well under.
 SOCKDIR="$(mktemp -d /tmp/wa-spike.XXXXXX)/AgentDesktop"; mkdir -p "$SOCKDIR"
-SOCK="$SOCKDIR/control.sock"
+SOCK="$SOCKDIR/runtime.sock"
 node -e 'const net=require("net");const s=net.createServer(c=>c.on("data",d=>{if(d.toString().trim()==="ping")c.write("pong\n")}));s.listen(process.argv[1]);process.on("SIGTERM",()=>{s.close();process.exit(0)})' "$SOCK" &
 SOCK_PID=$!
 sleep 0.5

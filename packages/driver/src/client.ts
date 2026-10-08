@@ -1,9 +1,9 @@
-// AgentDesktop runtime/1 client over control.sock (docs/lanes/lane-a.md).
+// AgentDesktop runtime/1 client over runtime.sock (docs/lanes/lane-a.md).
 import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  DEFAULT_CONTROL_ENDPOINT, DriverError, EXPECTED_PRODUCT, MAX_ARTIFACT_CHUNK_BYTES, RUNTIME_API_VERSION,
+  DEFAULT_RUNTIME_ENDPOINT, DriverError, EXPECTED_PRODUCT, MAX_ARTIFACT_CHUNK_BYTES, RUNTIME_API_VERSION,
 } from '@wechat-agent/ports';
 import type {
   Action, ActionReceipt, AgentDesktopDriver, Artifact, Capabilities, CancelReceipt, Desktop, DriverConfig, DriverState,
@@ -20,7 +20,7 @@ const WAIT_GRACE_MS = 2_000;
 
 /** `~` and `~/...` expand to the home directory; nothing else is rewritten and no other socket is probed. */
 export function resolveEndpoint(endpoint: string | undefined): string {
-  const raw = endpoint ?? DEFAULT_CONTROL_ENDPOINT;
+  const raw = endpoint ?? DEFAULT_RUNTIME_ENDPOINT;
   if (raw === '~') return os.homedir();
   if (raw.startsWith('~/')) return path.join(os.homedir(), raw.slice(2));
   return raw;

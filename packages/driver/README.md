@@ -11,7 +11,7 @@ import { createDriver } from '@wechat-agent/driver';
 
 const driver = createDriver({
   client: { name: 'WeChat Agent', version: '0.1.0' },
-  // endpoint 省略 = DEFAULT_CONTROL_ENDPOINT（~ 会展开）；没有回退列表，连不上就是 runtime_offline
+  // endpoint 省略 = DEFAULT_RUNTIME_ENDPOINT（~ 会展开）；没有回退列表，连不上就是 runtime_offline
   requestTimeoutMs: 10_000,   // 默认 10 s；超时 → deadline_exceeded（phase transport，notSent=false）
   connectTimeoutMs: 5_000,
 });
