@@ -1,0 +1,12 @@
+{
+  "scene": "new-friends-header-only",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "contacts",
+  "coverage": "current_viewport",
+  "requests": []
+}

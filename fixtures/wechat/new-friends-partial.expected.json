@@ -1,0 +1,15 @@
+{
+  "scene": "new-friends-partial",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "new_friends",
+  "coverage": "partial",
+  "requestsAtLeast": 10,
+  "warningsInclude": [
+    "rows may continue"
+  ]
+}

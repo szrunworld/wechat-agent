@@ -1,0 +1,18 @@
+{
+  "scene": "contact-detail",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "contact_detail",
+  "detail": {
+    "name": "王大为",
+    "wechatId": "wxid_synthetic02",
+    "region": "中国大陆"
+  },
+  "buttonsInclude": [
+    "发消息"
+  ]
+}

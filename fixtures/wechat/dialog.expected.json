@@ -1,0 +1,14 @@
+{
+  "scene": "dialog",
+  "image": {
+    "width": 2560,
+    "height": 1750,
+    "scale": 2
+  },
+  "applicability": "applicable",
+  "page": "dialog",
+  "buttons": [
+    "取消",
+    "确定"
+  ]
+}
