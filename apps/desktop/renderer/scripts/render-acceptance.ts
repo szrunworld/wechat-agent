@@ -10,7 +10,7 @@ import { createServer } from 'vite';
 import { sampleSnapshots } from '@wechat-agent/ports/fakes';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const outDir = fileURLToPath(new URL('../acceptance/', import.meta.url));
+const outDir = fileURLToPath(new URL('../../../../docs/acceptance/ui/', import.meta.url));
 const screens = ['W01', 'W02', 'W03', 'W04', 'W05', 'W06'] as const;
 const states = Object.keys(sampleSnapshots);
 /** One narrow (<900px, single column) render per screen, in its most loaded state. */
