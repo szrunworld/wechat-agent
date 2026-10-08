@@ -25,7 +25,8 @@ test('slice: create → approve → dispatch → receipt → fact → stop (T05/
 
   const waiting = await waitForTask(service, created.taskId, ['waiting_approval']);
   assert.equal(waiting.target?.displayName, NAME);
-  assert.ok(waiting.approval?.contentHash, 'the UI is shown the content hash it approves');
+  assert.ok(waiting.pendingContentHash, 'the UI is shown the content hash it approves');
+  assert.equal(waiting.approval, undefined, 'no approval exists before the person decides');
   assert.equal(slice.driver.countCalls('act'), 0, 'nothing is clicked before approval');
 
   const approval = await approve(service, created.taskId, slice.now);

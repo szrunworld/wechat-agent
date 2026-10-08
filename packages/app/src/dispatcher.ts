@@ -925,6 +925,11 @@ export class Dispatcher {
   async view(task: WeChatTask) {
     const rt = this.runtimes.get(task.taskId);
     const facts = await this.deps.ledger.listFacts(task.taskId);
+    if (rt?.approval) {
+      // The handler consumes the approval in the ledger; the copy taken at task.approve does not learn of it by itself.
+      const stored = await this.deps.ledger.getApproval(rt.approval.approvalId);
+      if (stored) rt.approval = stored;
+    }
     let platform = rt?.platform;
     if (!platform?.requestId) {
       // Attempts outlive this process: the ledger says which requestId a task dispatched.

@@ -318,7 +318,7 @@ test('T31: pause while the handler is mid-step: the late continuation finds the 
   const second = await createAccept(service, { operationId: 'op_late' });
   const waiting = await waitForTask(service, second.taskId, ['waiting_approval']);
   await service.call('task.cancel', { taskId: second.taskId, expectedRevision: waiting.revision });
-  await assert.rejects(service.call('task.approve', { taskId: second.taskId, approvalRevision: waiting.revision, approvedContentHash: waiting.approval!.contentHash, expiresAt: plusSeconds(slice.now(), 600) }), (e: unknown) => e instanceof IpcFailure && e.error.code === 'invalid_state');
+  await assert.rejects(service.call('task.approve', { taskId: second.taskId, approvalRevision: waiting.revision, approvedContentHash: waiting.pendingContentHash!, expiresAt: plusSeconds(slice.now(), 600) }), (e: unknown) => e instanceof IpcFailure && e.error.code === 'invalid_state');
   assert.equal((await waitForTask(service, second.taskId, TERMINAL)).state, 'cancelled');
   assert.equal(slice.driver.countCalls('act'), 0);
   await slice.app.stop();

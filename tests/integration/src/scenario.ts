@@ -32,10 +32,15 @@ export async function createRead(service: ApplicationService, operationId = 'op_
   return service.call('task.create', { operationId, type: 'read_requests', payload: { kind: 'read_requests' }, expectedAccountRevision: 1 });
 }
 
+/** The hash the UI must send back: `pendingContentHash` while waiting_approval (ports/src/ipc.ts); never one of its own. */
+export function shownContentHash(view: TaskView): string {
+  return view.pendingContentHash ?? view.approval?.contentHash ?? '';
+}
+
 /** Approve what task.show currently presents (revision + content hash), as the UI would. */
 export async function approve(service: ApplicationService, taskId: string, now: () => Timestamp, over: { expiresAt?: Timestamp } = {}): Promise<BusinessApproval> {
   const shown = await service.call('task.show', { taskId });
-  return service.call('task.approve', { taskId, approvalRevision: shown.revision, approvedContentHash: shown.approval?.contentHash ?? '', expiresAt: over.expiresAt ?? plusSeconds(now(), 600) });
+  return service.call('task.approve', { taskId, approvalRevision: shown.revision, approvedContentHash: shownContentHash(shown), expiresAt: over.expiresAt ?? plusSeconds(now(), 600) });
 }
 
 /** create → wait for approval → approve → wait for a terminal state. */

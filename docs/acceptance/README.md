@@ -83,3 +83,28 @@ front matter 是扁平的 `key: value`（空值写 `""`）。lint 规则：
 ## 执行顺序
 
 见 `docs/plan/00-parallel-work-plan.md` §5：集成竖切绿（阶段 3）→ 只读基线 A01–A04 + A05（阶段 4）→ 逐功能开放 A06–A10（阶段 5）→ A11 → A12 签收。
+
+## Fake 级集成结果（阶段 3）
+
+阶段 3（`docs/plan/00-parallel-work-plan.md` §5）的组合：**lane E 真 app core（`createApplication`）+ lane D 真 handlers（`createHandlers`）+ lane B 真 SQLite 账本（`openLedger`，临时文件）**，平台侧仍是 `FakeDriver`（lane A 的 Fake Runtime 服务端 API 未进 ports），识别是脚本化的 `GatedRecognizer`。测试文件 `tests/integration/test/real-stack.test.ts`，通过 `createSlice({ app: 'real', ledger, handlers })` 接线；命令 `npm test -w @wechat-agent/integration`（根 `npm run check` 退出码 0）。
+
+这些是 **Fake 级证据**：没有真机、没有真实微信，下表只说明"在真 app+handlers+ledger 组合下哪些断言执行过"，对应 `cases/T*.md` 的 `result` 一律**保持 `not_run`**。
+
+- appCommit：`2d74b3b`（分支 `integration-real`，基于 `app-skeleton` `ec3a792`）
+- platformCommit：无（FakeDriver）
+- contractSha256：见 `contracts/agentdesktop-runtime-v1/SHA256SUMS`（本阶段不经过真实契约）
+
+| 用例 | 执行过的断言（真 app + 真 handlers + 真 SQLite 账本） | 测试 |
+| --- | --- | --- |
+| T05 | 同 operationId 两次 `task.create` 是同一任务；不同意图同 operationId → `operation_conflict`；同一任务第二次审批被拒；只有一条 `accept` attempt；已 confirmed 的意图换 operationId 再建仍是同一任务 | `real-stack.test.ts` "T05" |
+| T08 | 危险点击时断连：attempt 为 `unknown`、requestId 已先持久化且与 act 使用的一致；任务停在 `stopping`、写门 `quiescence_unconfirmed`；重连后平台未确认静止前不判定、不 `run.cancel`；平台结束 connection_scoped Run 后 → `needs_reconciliation`（`platform_unknown`）；`task.reconcile` 用原 requestId 查 `request.show`；act 次数不增、无第二条 accept attempt；同意图再建仍是同一任务（额度 held，T40）；只有显式 `app.resume` 才重开写门且不重放 | `real-stack.test.ts` "T08" |
+| T16 | 审批后重新 observe：详情出现 发消息 / 列表行已是 已添加 → `no_op(already_friend)`；无危险 act、无 `accept` attempt、审批未消费、无 `friend_added` fact | `real-stack.test.ts` "T16"（两例） |
+| T21 | 危险点击使用审批后重新 observe 的坐标（详情按钮 1600,940），发生在审批后新获取的 Run 内 | `real-stack.test.ts` 竖切 |
+| T31 | 审批后、点击前 `app.pause`：任务 `cancelled`、`run.cancel` 一次、晚到的 handler 续体不 act（act 仍为 1，仅审批前导航）、无 `accept` attempt；等待审批中被取消的任务拒绝晚到的 `task.approve` | `real-stack.test.ts` "T31" |
+| T32 | 执行中 `task.cancel` 而平台 quiescence=pending：任务停在 `stopping`、写门 `quiescence_unconfirmed`、新任务 `blocked(write_gate_closed)`、`window.requestHandback` 返回 manual；平台确认静止后 `task.reconcile` → `cancelled`、写门重开；全程无危险 act | `real-stack.test.ts` "T32" |
+| T33 | 断连后 Run 已结束且 `quiescence: confirmed` 的同时业务结果仍 `needs_reconciliation`，两者并存互不覆盖 | `real-stack.test.ts` "T08" |
+| T36 | `run.start` 只带 sessionId；审批期间释放 Run（`run.finish`），批准后重新获取 | `real-stack.test.ts` 竖切 |
+| 竖切 | `task.create → waiting_approval`（`pendingContentHash` 为 app 算的 sha256，`approval` 缺席）→ `task.approve`（原样回传 hash）→ 重新 observe → 一次危险 act → 已添加 → `confirmed`；attempt 链全部 `verified`、requestId 互不相同、`findOpenAttempts` 为空、回执原样入库、`approval.consumed = true`；UI 自造的 hash 被拒后任务重新准备并以同一 hash 再次请求审批 | `real-stack.test.ts` 前两例 |
+| 基线 | `baselineOnConnect` 打开时，连接后先经 lane D 只读读取一次 新的朋友（act=0，step `baseline` done），之后的任务脚本正常 | `real-stack.test.ts` 末例 |
+
+已知未覆盖/未解决（阶段 3 范围内）：lane E 不写 outbox 事件（任务书未要求，lane H 的 stub 写过，归属待定）；`FakeDriver` 不会在断连时结束 connection_scoped Run，T08 由测试代替平台调用 `confirmQuiescence`；lane D 在危险 act 前的 `consumeApproval` 发生在 `checkSignal` 之前，暂停后晚到的续体可能已消费审批但不会 act（保守，不断言）。

@@ -637,9 +637,9 @@ class StubApp implements Application {
     return {
       taskId: task.taskId, type: task.type, state: task.state, stateReason: task.stateReason ?? this.reasons.get(task.taskId), revision: task.revision,
       target: pending ? { displayName: pending.request.summary.targetLabel, visibleIdentifier: pending.request.summary.visibleIdentifier, kind: 'friend_request', confidence: pending.request.summary.identityConfidence, evidenceIds: pending.request.summary.evidenceIds } : undefined,
-      approval: pending
-        ? { approvalId: 'pending', contentHash: pending.request.contentHash, expiresAt: '', consumed: false }
-        : e.approval ? { approvalId: e.approval.approvalId, contentHash: e.approval.contentHash, expiresAt: e.approval.expiresAt, consumed: e.approval.consumedAt !== undefined } : undefined,
+      // ports/src/ipc.ts: while waiting_approval the view carries `pendingContentHash` and no `approval`.
+      pendingContentHash: pending ? pending.request.contentHash : undefined,
+      approval: e.approval ? { approvalId: e.approval.approvalId, contentHash: e.approval.contentHash, expiresAt: e.approval.expiresAt, consumed: e.approval.consumedAt !== undefined } : undefined,
       platform: e.runId || e.requestId ? { runId: e.runId, requestId: e.requestId, delivery: e.delivery, execution: e.execution, quiescence: e.quiescence } : undefined,
       facts: await this.ledger.listFacts(task.taskId),
       timeline: [...e.timeline],
