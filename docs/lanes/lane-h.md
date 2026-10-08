@@ -29,3 +29,18 @@
 - 完成后开 **draft PR** 到 `app-skeleton`，不要合并；PR 描述列：改了哪些文件、跑了什么命令和结果、T 用例状态、未完成项、INTERFACE REQUEST。
 - 别碰别的 lane 的目录，哪怕只是"顺手修一下"。
 
+
+## 进度（2026-10-08，lane-h 分支）
+
+- `tests/integration/src/`：`wiring.ts`（装配根，每个依赖一个替换点；`WECHAT_AGENT_SLICE=ledger,handlers,app` 或 `createSlice({ ledger, handlers })` 切换真实现）、`stub-handlers.ts`（read_requests / accept_request 最小桩，按 §09 顺序走 port）、`stub-app.ts`（与 lane E `Application` 同形的最小 app：intake 幂等、串行派发、审批等待、写门、pause/stop 等静止、request.show 恢复、reconcile 不重发、快照投影）、`fixtures.ts`（合成夹具 + `GatedRecognizer.hold(n)` 时序钩子）、`scenario.ts`、`acceptance-lint.ts`。
+- `tests/integration/test/`：`vertical-slice.test.ts`（竖切 + T01/T03/T05/T11/T14/T16/T40）、`faults.test.ts`（故障矩阵 T06/T07/T08/T09/T10/T21/T31/T32/T33/T34/T37/T38）、`adr-regressions.test.ts`（ADR-01～10，平台侧 `platform_owned` skip）、`real-impls.test.ts`（合并后的真 SQLite Ledger / lane D 真 handlers 跑同一竖切）、`lint-acceptance.test.ts`。
+- `docs/acceptance/`：README（别名与授权证据约定）、`cases/T01–T42.md`（全部 `not_run`）、`steps/A01–A12.md`、`support-matrix.md`（全部 `not_tested`）。
+- 未替换：Driver 仍是 `FakeDriver`（lane A 的 `FakeRuntime` 需要把 `calls/acts/runs/dropConnection` 断言改成 `LoggedRequest` + `FakeFault`，下一步做）；App 仍是本 lane 的桩（lane E 未合并）。
+
+## INTERFACE REQUEST
+
+- `INTERFACE REQUEST: ATTEMPT_TRANSITIONS / Ledger 需要一个"已证明未送达"的 attempt 终态（如 dispatching → not_sent）`：notSent=true 时现在只能 `markUnknown(attemptId, 'not_sent:<code>')`，语义上 unknown 应只由核实结算；lane D 的 `Flow.act` 也是同样写法。
+- `INTERFACE REQUEST: Ledger.listAttempts(taskId)`：reconcile / TaskView.platform 需要按任务找 attempt 与 requestId，现在只能靠 `fact.data.requestId`（桩 handler 写入；真 handler 不一定写）。
+- `INTERFACE REQUEST: @wechat-agent/ports/fakes 导出 pageFacts / FAKE_PROFILE / DEFAULT_POLICY`：exports map 不允许深层 import，集成包只能复制一份 `pageFacts`。
+- `INTERFACE REQUEST: FakeDriverOptions.cancel?: { quiescence: 'pending' | 'confirmed' }`：`FakeDriver.cancelRun` 总是直接 confirmed，T32 只能用 `waitRun` 的 `wait_timeout` 注入模拟"受理但未静止"。
+- 约定（非接口改动，请 lane E/F 确认）：待审批阶段 `TaskView.approval` 为 `{ approvalId: 'pending', contentHash, expiresAt: '', consumed: false }`，UI 用它的 `contentHash` 调 `task.approve`。
