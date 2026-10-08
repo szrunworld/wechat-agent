@@ -1,0 +1,14 @@
+:root { color-scheme: light dark; font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; }
+body { margin: 0; padding: 24px; background: Canvas; color: CanvasText; }
+main { max-width: 720px; margin: 0 auto; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 20px 0 8px; }
+.note { color: GrayText; font-size: 13px; }
+dl { display: grid; grid-template-columns: 7em 1fr; gap: 4px 12px; margin: 0; }
+dt { color: GrayText; }
+dd { margin: 0; word-break: break-all; }
+ol { padding-left: 1.4em; }
+li[data-state="done"]::after { content: " · 完成"; color: GrayText; }
+li[data-state="failed"]::after { content: " · 失败"; font-weight: 600; }
+li[data-state="blocked"]::after { content: " · 受阻"; }
+li[data-state="pending"]::after { content: " · 待处理"; color: GrayText; }
