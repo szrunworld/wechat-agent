@@ -3,7 +3,7 @@
 // TASK_TRANSITIONS from a state to a target.
 import { TASK_TRANSITIONS, TERMINAL_TASK_STATES } from '@wechat-agent/ports';
 import type {
-  ApprovalDecision, ApprovalRequest, BusinessApproval, DomainFact, DomainReasonCode, Id, Revision, TargetRef, TaskState, TaskType, TaskView, Timestamp, WeChatTask,
+  ApprovalDecision, ApprovalRequest, BusinessApproval, DomainFact, DomainOutcome, DomainReasonCode, Id, Revision, TargetRef, TaskState, TaskType, TaskView, Timestamp, WeChatTask,
 } from '@wechat-agent/ports';
 import { hashContent, Mutex, type Deferred } from './support.ts';
 
@@ -41,6 +41,8 @@ export interface TaskRuntime {
   runOpen?: boolean;
   /** Reason of the latest blocked/terminal transition (the ledger only audits it). */
   stateReason?: DomainReasonCode;
+  /** The handler's conclusion being settled right now; the outbox event of the terminal transition carries it. */
+  finalOutcome?: DomainOutcome;
   stateDetail?: string;
   /** Serialises state changes of this task (approve vs cancel vs handler return). */
   lock: Mutex;

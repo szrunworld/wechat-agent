@@ -51,3 +51,18 @@ lane E 的后台 agent 在会话重启时中断，代码已完成：`packages/ap
 | 已取消任务的在途 handler 不能在 resume 后过写门 | passed（Fake） | stop.test.ts |
 
 未完成：agent 的最终报告缺失，INTERFACE REQUEST 以代码里的用法为准（协调者审查时未发现接口之外的调用）。
+
+## 进度记录（2026-10-08，Outbox，分支 `task-outbox`）
+
+Kevin 的要求："在进入真实外发阶段之前，必须补齐 Outbox 的持久化、幂等、发送结果确认及异常恢复测试，否则容易出现断连或重试后的重复发送。"
+
+- `packages/app/src/outbox.ts`：`OutboxWriter`（终态转换与关键业务事实落账时入队，`payloadHash = sha256(canonicalJson(payload))`，`revision` = 任务 revision，同 `(taskId, revision, payloadHash)` 不重复）、`OutboxDeliverer`（串行、按 eventId 幂等、指数退避、重启从 `pendingOutbox` 恢复、结果写 `reconciliation` fact `data.kind='outbox_delivery'`、不持有 driver）、`FileSink`（JSONL，`<dataDir>/outbox.jsonl`，按 eventId 去重）、`MemorySink`（可注入失败/超时/异常/重复）。
+- `Dispatcher.transition` 终态走 `OutboxWriter.finalize`；`finish` 与 handler 的 `appendFact` 对 `friend_added / friend_request_sent / message_sent / draft_written` 另发一条 `fact` 事件。
+- SQLite（lane B，经协调者允许）：迁移 `0003_outbox_delivery.sql`（attempts/last_error/receipt/enqueued_at/settled_at、唯一索引），`transitionTaskWithOutbox`（转换 + 事件同一事务）、`deferOutbox`、`settleOutbox`、`listOutbox`；App 以结构探测使用，fake 走两次写的回退。
+- 测试：`packages/app/test/outbox.test.ts`（fakes，12 条）、`tests/integration/test/outbox.test.ts`（fake + 真 SQLite 各 6 条 + SQLite 原子性 + 两条 SIGKILL 子进程 + 两条真栈端到端）。
+
+INTERFACE REQUEST（给协调者，现以 SQLite 扩展方法绕过）：
+- `Ledger.transitionTask(..., outbox?: (task) => OutboxDraft)` 或独立 `transitionTaskWithOutbox`：终态与事件同一事务，fake 也应实现。
+- `Ledger.deferOutbox(eventId, retryAt, error)`：可重试失败保持 pending 并持久化 `retryAt/attempts/lastError`；现有 `markOutbox('failed', retryAt)` 会让事件脱离 `pendingOutbox`，无法用于重试。
+- `Ledger.settleOutbox(eventId, 'delivered'|'failed', { receipt?, error? }, now)` 与 `Ledger.listOutbox(taskId)`；`OutboxEvent` 增加 `attempts / lastError / receipt`。
+- `enqueueOutbox` 的契约应写明对 `(taskId, revision, payloadHash)` 幂等（SQLite 已如此，fake 未改）。

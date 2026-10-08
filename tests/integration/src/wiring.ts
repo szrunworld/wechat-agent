@@ -18,7 +18,7 @@ import type { AgentDesktopDriver, HandlerRegistry, Ledger, PageFacts, Recognizer
 import { FakeDriver, InMemoryLedger, type FakeDriverOptions } from '@wechat-agent/ports/fakes';
 import { openLedger } from '@wechat-agent/ledger';
 import { createHandlers } from '@wechat-agent/handlers';
-import { createApplication, type AppConfig } from '@wechat-agent/app';
+import { createApplication, MemorySink, type AppConfig, type OutboxSink } from '@wechat-agent/app';
 import { GatedRecognizer, T0, clock, observation } from './fixtures.ts';
 import { createStubApplication, type Application } from './stub-app.ts';
 import { createStubHandlers } from './stub-handlers.ts';
@@ -39,6 +39,8 @@ export interface SliceOptions {
    */
   app?: 'real' | 'stub';
   appConfig?: Partial<AppConfig>;
+  /** Real app only: where outbox events are delivered. Default: a MemorySink the test can inspect as `slice.outbox`. */
+  outboxSink?: OutboxSink;
   now?: () => Timestamp;
   quiescenceTimeoutMs?: number;
 }
@@ -50,6 +52,8 @@ export interface Slice {
   handlers: HandlerRegistry;
   app: Application;
   now: () => Timestamp;
+  /** The real app's outbox sink (a MemorySink unless the test passed its own); undefined for the stub app. */
+  outbox?: OutboxSink;
 }
 
 /** Four bytes stand in for the screenshot; the scripted recognizer never looks at them. */
@@ -81,11 +85,12 @@ export async function createSlice(options: SliceOptions = {}): Promise<Slice> {
 
   // Application: lane E's createApplication or the stub; both return { service, start, stop }.
   const appKind = options.app ?? (real.has('app') ? 'real' : 'stub');
+  const outbox = appKind === 'real' ? options.outboxSink ?? new MemorySink() : undefined;
   const app: Application = appKind === 'real'
-    ? createApplication({ driver, ledger, recognizer, handlers, now, config: { ...REAL_APP_SLICE_CONFIG, ...options.appConfig } })
+    ? createApplication({ driver, ledger, recognizer, handlers, now, outboxSink: outbox, config: { ...REAL_APP_SLICE_CONFIG, ...options.appConfig } })
     : createStubApplication({ driver, ledger, recognizer, handlers, now, quiescenceTimeoutMs: options.quiescenceTimeoutMs });
 
-  return { driver, ledger, recognizer, handlers, app, now };
+  return { driver, ledger, recognizer, handlers, app, now, outbox };
 }
 
 export type { AgentDesktopDriver, Recognizer };
