@@ -52,7 +52,6 @@ export interface LedgerDiagnostics {
   lastError?: { code?: string; message: string; operation: string; at: Timestamp };
   quickCheck?: string;
   rows?: Record<string, number>;
-  [extra: string]: unknown;
 }
 
 export interface Ledger {
