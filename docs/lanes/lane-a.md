@@ -31,3 +31,41 @@
 - 完成后开 **draft PR** 到 `app-skeleton`，不要合并；PR 描述列：改了哪些文件、跑了什么命令和结果、T 用例状态、未完成项、INTERFACE REQUEST。
 - 别碰别的 lane 的目录，哪怕只是"顺手修一下"。
 
+
+## 进度记录（2026-10-08，分支 lane-a）
+
+交付状态（对应上方 1–10）：
+
+| # | 项 | 状态 |
+| --- | --- | --- |
+| 1 | `createDriver`：JSONL 帧 ≤1 MiB 本地拒绝（`frame_too_large`，notSent）、按 requestId 配对应答、`requestTimeoutMs` → `deadline_exceeded`（transport，notSent=false） | 完成 |
+| 2 | 端点 `config.endpoint ?? DEFAULT_CONTROL_ENDPOINT`，`~` 展开，无回退；连不上 `runtime_offline`（connect，notSent） | 完成 |
+| 3 | `connect()` 握手校验 product/apiVersions，不符 → `incompatible` + `version_mismatch` | 完成 |
+| 4 | 方法名与参数按 `methods.json` / `runtime.schema.json`；`startRun` 不传 lifetime/ownership/origin | 完成 |
+| 5 | `act` 的 requestId 由调用方给，平台幂等回执 / `idempotency_conflict` 原样透传 | 完成 |
+| 6 | `readArtifact` ≤512 KiB 分块到 eof，校验 byteSize+sha256，不符 `internal_error`（local） | 完成 |
+| 7 | `subscribe` 单独连接+握手，`EventFrame` 解析，cursor 随帧更新，断连迭代器结束，`events_cursor_expired` 透传 | 完成 |
+| 8 | 出站请求本地 schema 校验（自写 JSON Schema 子集校验器 `src/schema.ts`，无新依赖） | 完成 |
+| 9 | Fake Runtime `src/fake-runtime.ts`：全部 33 个 implemented 方法；注入：断连、超时、`idempotency_conflict`、`events_cursor_expired`、request.show `not_found`、act notSent、`input_disabled`、`stale_observation`、回执覆盖 | 完成 |
+| 10 | `packages/driver/README.md` | 完成 |
+
+T 用例（Driver 侧，全部对 Fake Runtime 执行过断言，见 `packages/driver/test/driver.test.ts`）：
+
+| 用例 | 状态 | 断言摘要 |
+| --- | --- | --- |
+| T02 | passed（Fake 级） | product 不符 / 不含 runtime/1 / 服务端 version_mismatch 三种 → `version_mismatch`，state=`incompatible` |
+| T06 | passed（Fake 级） | 同 requestId 同参数回同一 receiptId（handler 只跑一次）；不同参数 → `idempotency_conflict`（phase handler）原样抛出 |
+| T08 | passed（Fake 级） | 回执前断连 → `connection_lost`，phase transport，notSent=false；state=`disconnected`；新连接 `request.show` 得 completed |
+| T09 | passed（Fake 级） | `request.show` 的 `not_found`（phase handler，retryable false，message 原样）透传；注入的过期 not_found 同样 |
+| T34 | passed（Fake 级） | 断开后 state=`disconnected`，150 ms 内 Fake 接受连接数不变；调用 → `connection_lost`（notSent）；显式 `connect()` 才重连 |
+| T35 | passed（Fake 级） | 关闭订阅后 Fake 连接数回到 1，控制连接仍 `connected`，`status()` 正常 |
+| T36 | passed（Fake 级） | Fake 日志里 `run.start` params 为 `{}`，无 lifetime/ownership/origin；Run 对象不含 attachToken；Fake 对带提升参数的 run.start 回 `ownership_escalation_denied` |
+| T37 | passed（Fake 级） | `after` 早于保留范围 / 注入 → `subscribe` 抛 `events_cursor_expired`，控制连接不受影响 |
+
+注意：以上全部是 Fake/夹具级通过，不是真机证据（计划 §8）。
+
+命令：`npm run typecheck -w @wechat-agent/driver`、`npm test -w @wechat-agent/driver`（34 个测试）、根 `npm run check`、`scripts/check-ownership.sh a`。
+
+INTERFACE REQUEST: `AgentDesktopDriver.finishRun(runId, outcome: 'success'|'failed'|'cancelled')` 需要和契约对齐 —— `run_finish_params` 只有 `exitCode`（integer），没有 outcome；Driver 暂按 success→0、failed→1、cancelled→130 映射。建议改成 `finishRun(runId, exitCode?: number)`（取消走 `cancelRun`），或由协调者把映射写进接口注释。
+INTERFACE REQUEST: `Capabilities.backend.features` 在 ports 里是 `Record<string, unknown>`，契约 schema 是 `string[]`（uniqueItems，pattern `^[a-z]+(\.[a-z][a-zA-Z]*)+$`）；Driver 原样返回线上数组。建议改为 `features: string[]`。
+INTERFACE REQUEST（仅说明，不必改）: `listWindows({ desktopId })` —— `window_list_params` 没有 `desktopId`，Driver 把它放进 envelope `context.desktopId`；契约的 `bundleId` / `includeOffscreen` 过滤目前无法通过端口传入。`ActionReceipt.timing.completedAt` ports 允许 null，契约要求 Timestamp。

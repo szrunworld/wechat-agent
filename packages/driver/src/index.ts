@@ -1,5 +1,11 @@
-// Lane A. See docs/lanes/lane-a.md.
-import type { AgentDesktopDriver, DriverConfig } from '@wechat-agent/ports';
-export function createDriver(_config: DriverConfig): AgentDesktopDriver {
-  throw new Error('lane A: not implemented yet');
-}
+// Lane A: the AgentDesktop runtime/1 driver and a fault-injecting Fake Runtime.
+// See docs/lanes/lane-a.md and packages/driver/README.md.
+export { createDriver, resolveEndpoint } from './client.ts';
+export { FakeRuntime, type FakeRuntimeOptions, type FakeFault, type LoggedRequest } from './fake-runtime.ts';
+export { encodeFrame, LineDecoder } from './framing.ts';
+export { RpcConnection } from './connection.ts';
+export {
+  SchemaValidator, validator, runtimeSchema, methodsContract, errorsContract, METHODS, ERROR_CODES,
+  requestProblems, resultProblems, paramsSchemaName, resultSchemaName, canonicalJson,
+  type JsonSchema, type MethodSpec, type ErrorSpec,
+} from './schema.ts';
