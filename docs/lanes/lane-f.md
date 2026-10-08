@@ -26,3 +26,20 @@
 - 完成后开 **draft PR** 到 `app-skeleton`，不要合并；PR 描述列：改了哪些文件、跑了什么命令和结果、T 用例状态、未完成项、INTERFACE REQUEST。
 - 别碰别的 lane 的目录，哪怕只是"顺手修一下"。
 
+
+## 进度（2026-10-08，分支 lane-f）
+
+- 工程：React 19 + TypeScript + Vite 7；`npm run dev -w @wechat-agent/renderer` 用 `FakeApplicationService`，页头下拉可切换 13 个 `sampleSnapshots` 状态；URL `?screen=W03&state=unknown_result&panel=0` 可直达。
+- 六屏：`src/screens/W01Setup.tsx`（步骤逐项状态 + 失败定位 + 账号确认）、`W02Workbench.tsx`（账号/巡检/三计数/当前任务/暂停恢复/接管）、`W03Approval.tsx`（证据卡 + 批准/先跳过，批准仅本对象本次）、`W04Compose.tsx`（会话类型、上下文覆盖说明、草稿编辑/保存、最终正文批准、加好友表单；对象不明则禁用）、`W05TaskDetail.tsx`（三层结果、时间线、仅核实 / 我已人工检查；没有重发入口）、`W06Settings.tsx`（权限、策略、保留期、脱敏诊断导出、归还手动指引）。
+- 文案：`src/copy.ts` 对 stopping / 静止未确认 / unknown / 平台离线 / 身份歧义 / 审批过期 / 覆盖部分 各有独立文案；状态标签都带字形 + 文字，不只靠颜色。
+- 规则：`src/rules.ts` 是按钮启用/禁用的纯函数（按 `features`、`inputGate`、任务状态、置信度 ≥ 0.7、账号确认）；禁用时按钮旁列出原因并用 `aria-describedby` 关联。
+- 可访问性：所有主控是 `<button>`，`:focus-visible` 描边，skip link；<900px 单栏；`.identity` 用 `overflow-wrap:anywhere`，昵称/正文不截断；`EvidenceViewer` 支持放大/平移（裁剪）/方向键，默认脱敏。
+- 测试（vitest + jsdom + testing-library）：`test/screens.test.tsx` 六屏 × 13 状态渲染 + 无"再发"类按钮 + 七种异常态文案互不相同；`test/rules.test.ts` 禁用逻辑；`test/interactions.test.tsx` 关键交互（批准带 revision 与 sha256、低置信度禁用、stopping 禁用、仅核实/人工检查、暂停带 expectedRevision、账号确认、诊断导出）；`test/boundary.test.ts` IPC 白名单与渲染源码无 Node 导入/无平台 act 参数。
+- 离屏渲染：`npm run acceptance:render -w @wechat-agent/renderer`（vite dev server + 无头 Chrome，不碰微信）输出 6 屏 × 13 状态 + 每屏一张 <900px 单栏图，共 84 张 PNG 到 `apps/desktop/renderer/acceptance/`（`docs/acceptance/ui/` 归 lane H，由协调者搬）。
+- 未完成：留言与截图像素无法从 `TaskView` 得到（见下）；证据查看器的图片源留空，只显示证据编号。
+- 根 `package-lock.json` 未随本分支提交（根配置归协调者）：合并后请在根目录 `npm install` 重新生成。
+
+INTERFACE REQUEST: `TaskView.target` 需要 `message?: string`（好友申请留言，方案 W03 证据卡要显示留言；现在只能显示占位）。
+INTERFACE REQUEST: `IpcMethods` 需要一个只读的 `evidence.read`（入参 `evidenceId`，返回脱敏后的图片 data URL 或本机路径 + 裁剪框），否则 W03/W05 的截图区只能显示证据编号；渲染层不能自己读文件。
+INTERFACE REQUEST: `TaskView` 需要 `pendingContentHash?: string`（待批准内容的哈希由应用核心计算并下发）；现在渲染层用 WebCrypto 对最终正文 / 对象标识自行 sha256，应用核心必须用同一算法才能对上 `task.approve.approvedContentHash`。
+INTERFACE REQUEST: `AppSnapshot.policy` 需要 `approvalTtlSeconds` 与 `evidenceRetentionDays`（W06 要显示保留期；W03/W04 的 `task.approve.expiresAt` 现在用渲染层常量 10 分钟）。
