@@ -9,6 +9,9 @@
 // The driver stays FakeDriver until lane A's Fake Runtime server lands (its
 // start/stop API is not frozen in ports); the recognizer stays scripted
 // because the slice is about flows, not pixels.
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AgentDesktopDriver, HandlerRegistry, Ledger, PageFacts, Recognizer, Timestamp } from '@wechat-agent/ports';
 import { FakeDriver, InMemoryLedger, type FakeDriverOptions } from '@wechat-agent/ports/fakes';
 import { openLedger } from '@wechat-agent/ledger';
@@ -52,7 +55,7 @@ export async function createSlice(options: SliceOptions = {}): Promise<Slice> {
   const driver = new FakeDriver({ principalRole: 'paired', observations: [observation()], artifacts: { art_fixture: FIXTURE_PNG }, ...options.driver });
 
   // Ledger: lane B's SQLite ledger on a temp path, or the in-memory reference.
-  const ledger = options.ledger ?? (real.has('ledger') ? await openLedger(':memory:') : new InMemoryLedger());
+  const ledger = options.ledger ?? (real.has('ledger') ? await openLedger(join(mkdtempSync(join(tmpdir(), 'wechat-agent-slice-')), 'ledger.sqlite')) : new InMemoryLedger());
 
   // Recognizer: scripted facts with a timing hook (lane C's recognizer reads real pixels; the slice does not).
   const recognizer = new GatedRecognizer(options.facts ?? []);
