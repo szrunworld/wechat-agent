@@ -44,6 +44,17 @@ export type QuotaDecision =
 
 export interface LegacySuppression { key: string; sourceHash: string }
 
+/** What a support bundle may say about the ledger. Never row contents. */
+export interface LedgerDiagnostics {
+  schemaVersion: number;
+  writable: boolean;
+  reason?: string;
+  lastError?: { code?: string; message: string; operation: string; at: Timestamp };
+  quickCheck?: string;
+  rows?: Record<string, number>;
+  [extra: string]: unknown;
+}
+
 export interface Ledger {
   /** Same operationId + same fingerprint returns the existing task (created=false); a different fingerprint throws. */
   intake(input: TaskIntake, now: Timestamp): Promise<{ task: WeChatTask; created: boolean }>;
@@ -53,6 +64,8 @@ export interface Ledger {
   transitionTask(taskId: Id, to: TaskState, expectedRevision: Revision, now: Timestamp, reason?: string): Promise<WeChatTask>;
 
   recordApproval(approval: Omit<BusinessApproval, 'approvalId' | 'consumedAt'>): Promise<BusinessApproval>;
+  /** Read without consuming: a handler re-checks an approval before the dangerous click; the UI shows its state. */
+  getApproval(approvalId: Id): Promise<BusinessApproval | undefined>;
   /** Single use; throws LedgerConflictError('approval') when consumed, expired, or any revision/hash differs. */
   consumeApproval(approvalId: Id, expected: { taskId: Id; contentHash: string; targetRevision: Revision; accountRevision: Revision }, now: Timestamp): Promise<BusinessApproval>;
 
@@ -64,6 +77,8 @@ export interface Ledger {
   markVerified(attemptId: Id, now: Timestamp): Promise<ActionAttempt>;
   markUnknown(attemptId: Id, reason: string, now: Timestamp): Promise<ActionAttempt>;
   getAttempt(attemptId: Id): Promise<ActionAttempt | undefined>;
+  /** The platform receipt recordReceipt stored verbatim, for reconciliation. */
+  getReceipt(attemptId: Id): Promise<Record<string, unknown> | undefined>;
   /** Attempts a crash left in dispatching/receipt_received: recovery queries them, never re-dispatches. */
   findOpenAttempts(): Promise<ActionAttempt[]>;
 
@@ -93,5 +108,7 @@ export interface Ledger {
   isSuppressed(key: string): Promise<boolean>;
 
   health(): Promise<{ writable: boolean; reason?: string; schemaVersion: number }>;
+  /** For diagnostics.export; may be synchronous in an implementation, so always `await` it. */
+  diagnostics(): LedgerDiagnostics | Promise<LedgerDiagnostics>;
   close(): Promise<void>;
 }

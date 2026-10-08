@@ -89,6 +89,24 @@ export function runLedgerContract(open: () => Promise<Ledger>): void {
     await ledger.close();
   });
 
+  test('approvals and receipts can be read back without consuming, and diagnostics never carry rows', async () => {
+    const ledger = await open();
+    const { task } = await ledger.intake(intake(), T0);
+    const approval = await ledger.recordApproval({ taskId: task.taskId, accountRevision: 1, targetRevision: 1, draftRevision: 1, contentHash: 'c1', allowedAction: 'accept_request', expiresAt: '2026-10-08T11:00:00+08:00', createdAt: T0 });
+    assert.equal((await ledger.getApproval(approval.approvalId))?.consumedAt, undefined);
+    assert.equal(await ledger.getApproval('appr_missing'), undefined);
+    const attempt = await ledger.prepareAttempt({ taskId: task.taskId, stepId: 'accept' }, T0);
+    await ledger.markDispatching(attempt.attemptId, { requestId: 'rq_r', canonicalDigest: 'd', snapshotId: 's', sessionId: 'ses', runId: 'run' }, T1);
+    assert.equal(await ledger.getReceipt(attempt.attemptId), undefined);
+    await ledger.recordReceipt(attempt.attemptId, 'rcpt_1', { delivery: 'dispatched', execution: 'unknown' }, T1);
+    assert.deepEqual(await ledger.getReceipt(attempt.attemptId), { delivery: 'dispatched', execution: 'unknown' });
+    const diagnostics = await ledger.diagnostics();
+    assert.equal(typeof diagnostics.writable, 'boolean');
+    assert.equal(typeof diagnostics.schemaVersion, 'number');
+    assert.ok(!JSON.stringify(diagnostics).includes('陈一'), 'diagnostics must not carry row contents');
+    await ledger.close();
+  });
+
   test('legacy keys become suppressions only', async () => {
     const ledger = await open();
     const added = await ledger.importLegacySuppressions([{ key: '陈一|我是陈一', sourceHash: 'h' }, { key: '陈一|我是陈一', sourceHash: 'h' }], T0);
