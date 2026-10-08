@@ -3,7 +3,7 @@
 // so both are bundled to CommonJS with electron left external.
 // better-sqlite3 (native, used by @wechat-agent/ledger) is not bundled: the
 // alias routes it through src/native-sqlite.ts, which loads the copy rebuilt
-// for Electron's ABI from build/resources/node_modules (packaging/SQLITE-ABI.md).
+// for Electron's ABI from build/resources/native (packaging/SQLITE-ABI.md).
 // The ledger reads its migrations from `../migrations/` relative to
 // import.meta.url, which a CommonJS bundle does not have; it is defined here as
 // the bundle's own file URL and the SQL files are copied next to dist/ (shipped
