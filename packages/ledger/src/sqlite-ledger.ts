@@ -54,6 +54,16 @@ export interface LedgerDiagnostics {
 }
 
 type Row = Record<string, unknown>;
+
+/** OutboxEvent plus the delivery bookkeeping of migration 0003 (the port type stays frozen; extra fields are additive). */
+export interface StoredOutboxEvent extends OutboxEvent {
+  attempts: number;
+  lastError?: string;
+  receipt?: string;
+  enqueuedAt?: Timestamp;
+  settledAt?: Timestamp;
+}
+
 const TABLES = ['tasks', 'task_audit', 'approvals', 'attempts', 'quota_reservations', 'facts', 'evidence', 'outbox', 'account', 'policy', 'legacy_suppression'] as const;
 
 function sqliteCode(error: unknown): string | undefined {
@@ -534,19 +544,60 @@ export class SqliteLedger implements Ledger {
 
   // ---- outbox -------------------------------------------------------------
 
-  private outboxFromRow(r: Row): OutboxEvent {
+  private outboxFromRow(r: Row): StoredOutboxEvent {
     return compact({
       eventId: r.event_id as Id, taskId: r.task_id as Id, revision: r.revision as Revision, payloadHash: r.payload_hash as string,
       payload: JSON.parse(r.payload as string), state: r.state as OutboxEvent['state'], retryAt: opt(r.retry_at as Timestamp | null),
+      attempts: (r.attempts as number | null) ?? 0, lastError: opt(r.last_error as string | null), receipt: opt(r.receipt as string | null),
+      enqueuedAt: opt(r.enqueued_at as Timestamp | null), settledAt: opt(r.settled_at as Timestamp | null),
     });
   }
 
+  private outboxRow(eventId: Id): Row | undefined {
+    return this.db.prepare(`SELECT * FROM outbox WHERE event_id = ?`).get(eventId) as Row | undefined;
+  }
+
+  /**
+   * Inside a write transaction. One row per (taskId, revision, payloadHash): a second enqueue of the same triple
+   * returns the existing row untouched (its state included), so a repeated finalize never creates a second event.
+   */
+  private insertOutbox(event: Omit<OutboxEvent, 'eventId' | 'state'>, now: Timestamp | undefined): StoredOutboxEvent {
+    const existing = this.db.prepare(`SELECT * FROM outbox WHERE task_id = ? AND revision = ? AND payload_hash = ?`).get(event.taskId, event.revision, event.payloadHash) as Row | undefined;
+    if (existing) return this.outboxFromRow(existing);
+    const saved: StoredOutboxEvent = compact({ ...event, eventId: uid('out'), state: 'pending', attempts: 0, enqueuedAt: now });
+    this.db.prepare(`INSERT INTO outbox (event_id, task_id, revision, payload_hash, payload, state, retry_at, attempts, enqueued_at)
+      VALUES (@eventId, @taskId, @revision, @payloadHash, @payload, @state, @retryAt, 0, @enqueuedAt)`)
+      .run({ ...saved, payload: JSON.stringify(saved.payload), retryAt: nul(saved.retryAt), enqueuedAt: nul(saved.enqueuedAt) });
+    return saved;
+  }
+
   async enqueueOutbox(event: Omit<OutboxEvent, 'eventId' | 'state'>): Promise<OutboxEvent> {
-    return this.write('enqueueOutbox', () => {
-      const saved: OutboxEvent = compact({ ...event, eventId: uid('out'), state: 'pending' });
-      this.db.prepare(`INSERT INTO outbox (event_id, task_id, revision, payload_hash, payload, state, retry_at) VALUES (@eventId, @taskId, @revision, @payloadHash, @payload, @state, @retryAt)`)
-        .run({ ...saved, payload: JSON.stringify(saved.payload), retryAt: nul(saved.retryAt) });
-      return saved;
+    return this.write('enqueueOutbox', () => this.insertOutbox(event, undefined));
+  }
+
+  /**
+   * The task transition and its outbox event in ONE transaction (app core finalizing a task): either both are on
+   * disk or neither. Same checks and audit row as transitionTask; the event's revision is the task's new revision.
+   */
+  async transitionTaskWithOutbox(
+    taskId: Id, to: TaskState, expectedRevision: Revision, now: Timestamp, reason: string | undefined,
+    outbox: (task: WeChatTask) => Omit<OutboxEvent, 'eventId' | 'state'>,
+  ): Promise<{ task: WeChatTask; event: OutboxEvent }> {
+    return this.write('transitionTaskWithOutbox', () => {
+      const row = this.taskRow(taskId);
+      if (!row) throw new LedgerConflictError('transition', `no task ${taskId}`);
+      const task = this.taskFromRow(row);
+      if (task.revision !== expectedRevision) throw new LedgerConflictError('revision', `task ${taskId} is at revision ${task.revision}, not ${expectedRevision}`);
+      if (!canTransition(task.state, to)) throw new LedgerConflictError('transition', `${task.state} → ${to} is not allowed`);
+      const next = task.revision + 1;
+      this.db.prepare(`INSERT INTO task_audit (task_id, from_state, to_state, from_revision, to_revision, at, reason) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(taskId, task.state, to, task.revision, next, now, nul(reason));
+      const changed = this.db.prepare(`UPDATE tasks SET state = ?, revision = ?, updated_at = ? WHERE task_id = ? AND revision = ?`).run(to, next, now, taskId, task.revision).changes;
+      if (changed !== 1) throw new LedgerConflictError('revision', `task ${taskId} changed under us`);
+      const updated: WeChatTask = { ...task, state: to, revision: next, updatedAt: now };
+      const draft = outbox(updated);
+      if (draft.taskId !== taskId || draft.revision !== next) throw new LedgerConflictError('transition', `outbox event must belong to ${taskId}@${next}`);
+      return { task: updated, event: this.insertOutbox(draft, now) };
     });
   }
 
@@ -556,11 +607,40 @@ export class SqliteLedger implements Ledger {
 
   async markOutbox(eventId: Id, state: 'delivered' | 'failed', retryAt?: Timestamp): Promise<OutboxEvent> {
     return this.write('markOutbox', () => {
-      const row = this.db.prepare(`SELECT * FROM outbox WHERE event_id = ?`).get(eventId) as Row | undefined;
+      const row = this.outboxRow(eventId);
       if (!row) throw new LedgerConflictError('attempt', `no outbox event ${eventId}`);
       this.db.prepare(`UPDATE outbox SET state = ?, retry_at = ? WHERE event_id = ?`).run(state, nul(retryAt), eventId);
       return compact({ ...this.outboxFromRow(row), state, retryAt });
     });
+  }
+
+  /** A retryable delivery failure: the event stays pending, retry_at / attempts / last_error are persisted for the next process. */
+  async deferOutbox(eventId: Id, retryAt: Timestamp, error: string): Promise<StoredOutboxEvent> {
+    return this.write('deferOutbox', () => {
+      const row = this.outboxRow(eventId);
+      if (!row) throw new LedgerConflictError('attempt', `no outbox event ${eventId}`);
+      if (row.state !== 'pending') throw new LedgerConflictError('attempt', `outbox event ${eventId} is ${String(row.state)}, not pending`);
+      this.db.prepare(`UPDATE outbox SET retry_at = ?, attempts = attempts + 1, last_error = ? WHERE event_id = ?`).run(retryAt, error, eventId);
+      return this.outboxFromRow(this.outboxRow(eventId)!);
+    });
+  }
+
+  /** The sink's final answer: delivered (with its receipt) or failed (with the reason). Idempotent on a row already in that state. */
+  async settleOutbox(eventId: Id, state: 'delivered' | 'failed', detail: { receipt?: string; error?: string }, now: Timestamp): Promise<StoredOutboxEvent> {
+    return this.write('settleOutbox', () => {
+      const row = this.outboxRow(eventId);
+      if (!row) throw new LedgerConflictError('attempt', `no outbox event ${eventId}`);
+      if (row.state === state) return this.outboxFromRow(row);
+      if (row.state !== 'pending') throw new LedgerConflictError('attempt', `outbox event ${eventId} is ${String(row.state)}, not pending`);
+      this.db.prepare(`UPDATE outbox SET state = ?, retry_at = NULL, attempts = attempts + 1, receipt = ?, last_error = ?, settled_at = ? WHERE event_id = ?`)
+        .run(state, nul(detail.receipt), nul(detail.error), now, eventId);
+      return this.outboxFromRow(this.outboxRow(eventId)!);
+    });
+  }
+
+  /** Every outbox event of a task, oldest first, whatever its state (TaskView / diagnostics). */
+  async listOutbox(taskId: Id): Promise<StoredOutboxEvent[]> {
+    return this.read(() => (this.db.prepare(`SELECT * FROM outbox WHERE task_id = ? ORDER BY rowid`).all(taskId) as Row[]).map((r) => this.outboxFromRow(r)));
   }
 
   // ---- account & policy ---------------------------------------------------

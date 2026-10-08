@@ -16,6 +16,10 @@ export { SingleInstanceLock, AppLockedError } from './lock.ts';
 export { ManualScheduler, realScheduler, canonicalJson, hashContent, sha256, type Scheduler } from './support.ts';
 export { pathTo, projectTask, isTerminal, OPEN_TASK_STATES, type TaskRuntime } from './tasks.ts';
 export { toIpcFailure } from './application.ts';
+export {
+  OutboxWriter, OutboxDeliverer, MemorySink, FileSink, outboxExtension, taskFinalDraft, factDraft, payloadHashOf, KEY_FACT_KINDS, DEFAULT_OUTBOX_BACKOFF,
+  type OutboxSink, type SinkResult, type OutboxDraft, type OutboxLedgerExtension, type OutboxBackoff, type DeliveryReport, type TaskFinalPayload, type FactPayload, type MemorySinkScript,
+} from './outbox.ts';
 
 export function createApplication(deps: ApplicationDeps): Application {
   return new WeChatAgentApplication(deps);

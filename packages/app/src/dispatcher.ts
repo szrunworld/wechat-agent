@@ -12,6 +12,7 @@ import type { RuntimeConnector } from './connector.ts';
 import { isConnectionError } from './connector.ts';
 import type { FeatureMap } from './features.ts';
 import type { InputGate } from './gate.ts';
+import { KEY_FACT_KINDS, taskFinalDraft, type OutboxWriter } from './outbox.ts';
 import { PolicyGate, type Verdict } from './policy.ts';
 import { canonicalJson, Deferred, errorMessage, hashContent, Mutex, newId, sha256 } from './support.ts';
 import {
@@ -27,6 +28,8 @@ export interface DispatcherDeps {
   gate: InputGate;
   connector: RuntimeConnector;
   config: AppConfig;
+  /** Writes the outbox event of every terminal transition and key business fact (plan §8: App core owns the outbox). */
+  outbox: OutboxWriter;
   now(): Timestamp;
   features(): Promise<FeatureMap>;
   log(line: string): void;
@@ -133,7 +136,17 @@ export class Dispatcher {
 
   async transition(rt: TaskRuntime, task: WeChatTask, to: TaskState, reasonCode?: DomainReasonCode, detail?: string): Promise<WeChatTask> {
     const audit = reasonCode ? `${reasonCode}${detail ? `: ${detail}` : ''}` : detail;
-    const updated = await this.deps.ledger.transitionTask(task.taskId, to, task.revision, this.deps.now(), audit);
+    let updated: WeChatTask;
+    if (isTerminal(to)) {
+      // The terminal state and its outbox event are one ledger write (SQLite); the event's revision is the task's new one.
+      const keyFactIds = (await this.deps.ledger.listFacts(task.taskId)).filter((f) => KEY_FACT_KINDS.includes(f.factKind)).map((f) => f.factId);
+      const outcome = rt.finalOutcome;
+      const result = await this.deps.outbox.finalize(task.taskId, to, task.revision, this.deps.now(), audit, (final) => taskFinalDraft(final, { stateReason: reasonCode, reason: detail, outcome, keyFactIds }));
+      updated = result.task;
+      if (result.event) this.mark(rt, `外发事件已入账（${result.event.eventId}）`);
+    } else {
+      updated = await this.deps.ledger.transitionTask(task.taskId, to, task.revision, this.deps.now(), audit);
+    }
     if (reasonCode) { rt.stateReason = reasonCode; rt.stateDetail = detail; }
     else if (to === 'queued' || to === 'preparing' || to === 'ready' || to === 'executing' || to === 'verifying') { rt.stateReason = undefined; rt.stateDetail = undefined; }
     this.notify();
@@ -348,11 +361,17 @@ export class Dispatcher {
       for (const fact of result.facts) {
         if (stored.has(fact.factId)) continue;
         const { factId: _ignored, ...rest } = fact;
-        await this.deps.ledger.appendFact({ ...rest, taskId: task.taskId });
+        const saved = await this.deps.ledger.appendFact({ ...rest, taskId: task.taskId });
+        await this.deps.outbox.recordFact(saved);
       }
       await this.releaseRun(rt, result.outcome === 'confirmed' || result.outcome === 'no_op' ? 'success' : 'failed');
       const mapping = OUTCOME_TARGET[result.outcome];
-      task = await this.settle(rt, task, mapping.target, result.reasonCode ?? mapping.reason, result.reason, mapping.fallbacks);
+      rt.finalOutcome = result.outcome;
+      try {
+        task = await this.settle(rt, task, mapping.target, result.reasonCode ?? mapping.reason, result.reason, mapping.fallbacks);
+      } finally {
+        rt.finalOutcome = undefined;
+      }
       await this.settleQuota(rt, task.state);
       this.mark(rt, `结果：${result.outcome}${result.reasonCode ? `（${result.reasonCode}）` : ''}`);
       const event: FinishedEvent = { task, runtime: rt, result };
@@ -509,6 +528,11 @@ export class Dispatcher {
   private observeLedger(rt: TaskRuntime): Ledger {
     const ledger = this.deps.ledger;
     const overrides: Partial<Ledger> = {
+      appendFact: async (fact) => {
+        const saved = await ledger.appendFact(fact);
+        await this.deps.outbox.recordFact(saved);
+        return saved;
+      },
       prepareAttempt: async (input, now) => {
         const attempt = await ledger.prepareAttempt(input, now);
         rt.attempts.set(attempt.attemptId, { state: attempt.state });

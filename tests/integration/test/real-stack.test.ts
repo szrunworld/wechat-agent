@@ -141,7 +141,13 @@ test('real stack: task.create → waiting_approval (pendingContentHash) → task
   assert.ok(kinds.includes('platform_receipt:observed'), kinds.join(','));
   assert.ok(kinds.includes('friend_added:confirmed'), kinds.join(','));
   assert.ok(kinds.includes('request_read:observed'));
-  // Lane E writes no outbox events (nothing in its task book asks for them; lane H's stub did). Open item, not asserted.
+  // The app core writes the outbox (plan §8): the final state as an event at the task's revision, delivered by the app's own loop
+  // (tests/integration/test/outbox.test.ts covers the crash/retry matrix on this ledger).
+  const outbox = await (ledger as Ledger & { listOutbox(taskId: string): Promise<{ revision: number; state: string; payload: Record<string, unknown> }[]> }).listOutbox(created.taskId);
+  const final = outbox.find((e) => e.payload.kind === 'task_final');
+  assert.ok(final, 'a task_final outbox event exists');
+  assert.equal(final.revision, done.revision);
+  assert.equal(final.payload.state, 'confirmed');
   assert.equal((await ledger.health()).writable, true);
 
   const after = await service.call('app.getSnapshot', {});

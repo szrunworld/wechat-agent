@@ -5,7 +5,7 @@ import { SqliteLedger } from './sqlite-ledger.ts';
 import type { OpenOptions } from './sqlite-ledger.ts';
 
 export { SqliteLedger, DEFAULT_POLICY, peekSchemaVersion } from './sqlite-ledger.ts';
-export type { OpenOptions, FaultInjection, LedgerDiagnostics } from './sqlite-ledger.ts';
+export type { OpenOptions, FaultInjection, LedgerDiagnostics, StoredOutboxEvent } from './sqlite-ledger.ts';
 export { readLegacyState, LegacyStateError } from './legacy.ts';
 export type { LegacyState } from './legacy.ts';
 export { MIGRATIONS, SUPPORTED_SCHEMA_VERSION } from './migrations.ts';
