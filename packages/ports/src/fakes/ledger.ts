@@ -4,7 +4,7 @@ import type {
   QuotaReservation, Revision, TaskState, Timestamp, WeChatTask,
 } from '../domain.ts';
 import { LedgerConflictError, LedgerUnavailableError } from '../ledger.ts';
-import type { AttemptPrepare, Ledger, LegacySuppression, QuotaDecision, TaskIntake, TaskQuery } from '../ledger.ts';
+import type { AttemptPrepare, Ledger, LedgerDiagnostics, LegacySuppression, QuotaDecision, TaskIntake, TaskQuery } from '../ledger.ts';
 
 export const DEFAULT_POLICY: Policy = {
   revision: 1, allowlist: [], allowedActions: ['read', 'navigate', 'accept_request', 'send_friend_request', 'send_message'],
@@ -18,6 +18,7 @@ export class InMemoryLedger implements Ledger {
   readonly audit: { taskId: Id; from: TaskState; to: TaskState; at: Timestamp; reason?: string }[] = [];
   readonly approvals = new Map<Id, BusinessApproval>();
   readonly attempts = new Map<Id, ActionAttempt>();
+  readonly receipts = new Map<Id, Record<string, unknown>>();
   readonly quotas = new Map<Id, QuotaReservation>();
   readonly facts: DomainFact[] = [];
   readonly evidence = new Map<Id, Evidence>();
@@ -93,6 +94,10 @@ export class InMemoryLedger implements Ledger {
     return saved;
   }
 
+  async getApproval(approvalId: Id): Promise<BusinessApproval | undefined> {
+    return this.approvals.get(approvalId);
+  }
+
   async consumeApproval(approvalId: Id, expected: { taskId: Id; contentHash: string; targetRevision: Revision; accountRevision: Revision }, now: Timestamp): Promise<BusinessApproval> {
     this.write();
     const approval = this.approvals.get(approvalId);
@@ -129,8 +134,14 @@ export class InMemoryLedger implements Ledger {
     return this.moveAttempt(attemptId, 'dispatching', now, dispatch);
   }
 
-  async recordReceipt(attemptId: Id, receiptId: Id, _receipt: Record<string, unknown>, now: Timestamp): Promise<ActionAttempt> {
-    return this.moveAttempt(attemptId, 'receipt_received', now, { receiptId });
+  async recordReceipt(attemptId: Id, receiptId: Id, receipt: Record<string, unknown>, now: Timestamp): Promise<ActionAttempt> {
+    const moved = this.moveAttempt(attemptId, 'receipt_received', now, { receiptId });
+    this.receipts.set(attemptId, receipt);
+    return moved;
+  }
+
+  async getReceipt(attemptId: Id): Promise<Record<string, unknown> | undefined> {
+    return this.receipts.get(attemptId);
   }
 
   async markVerified(attemptId: Id, now: Timestamp): Promise<ActionAttempt> {
@@ -267,6 +278,10 @@ export class InMemoryLedger implements Ledger {
 
   async health(): Promise<{ writable: boolean; reason?: string; schemaVersion: number }> {
     return { writable: this.writable, reason: this.writable ? undefined : 'write failure injected', schemaVersion: 0 };
+  }
+
+  async diagnostics(): Promise<LedgerDiagnostics> {
+    return { schemaVersion: 0, writable: this.writable, reason: this.writable ? undefined : 'write failure injected', rows: { tasks: this.tasks.size, attempts: this.attempts.size, approvals: this.approvals.size } };
   }
 
   async close(): Promise<void> {}

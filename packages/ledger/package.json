@@ -4,10 +4,21 @@
   "private": true,
   "type": "module",
   "description": "Lane B: SQLite ledger (tasks, approvals, attempts, quota, facts, evidence, outbox)",
-  "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "test": "tsx --test test/*.test.ts"
   },
-  "dependencies": { "@wechat-agent/ports": "*" }
+  "dependencies": {
+    "@wechat-agent/ports": "*",
+    "better-sqlite3": "^12.11.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0"
+  }
 }

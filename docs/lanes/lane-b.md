@@ -32,3 +32,55 @@
 - 完成后开 **draft PR** 到 `app-skeleton`，不要合并；PR 描述列：改了哪些文件、跑了什么命令和结果、T 用例状态、未完成项、INTERFACE REQUEST。
 - 别碰别的 lane 的目录，哪怕只是"顺手修一下"。
 
+
+## 进度记录（lane-b，2026-10-08）
+
+### 交付状态
+
+| # | 项 | 状态 | 位置 |
+| --- | --- | --- | --- |
+| 1 | `openLedger(path, options?)`，better-sqlite3 12.x，WAL + `synchronous=FULL`，每次写 = 一个 `immediate` 事务，`busy_timeout` 5 s | 完成 | `packages/ledger/src/sqlite-ledger.ts`、`src/index.ts` |
+| 2 | 迁移 `migrations/0001_init.sql`，`schema_version` 表，每条迁移独立事务；文件版本高于代码 → `LedgerUnavailableError('newer_schema: …')`；同版本名字不同 → `migration_mismatch`；列表不连续 → 拒绝 | 完成 | `migrations/`、`src/migrations.ts` |
+| 3 | 11 张表；唯一索引 `tasks(operation_id)`、`attempts(task_id, step_id, attempt_ordinal)`、`attempts(request_id) WHERE NOT NULL`；额外 `quota_reservations(account_id, action_kind, intent_id) WHERE state <> 'released'` 保证同 intent 只有一条活动预留 | 完成 | `migrations/0001_init.sql` |
+| 4 | `intake` 幂等 / 指纹冲突 | 完成，契约 + T05 | |
+| 5 | `transitionTask` 用 `canTransition`，revision 不符抛 `revision`；状态与 `task_audit` 行同事务（`UPDATE … WHERE revision = ?` 二次校验） | 完成 | |
+| 6 | 审批单次消费，过期用 `Date.parse` 比较 | 完成，契约 | |
+| 7 | attempt 状态机按 `ATTEMPT_TRANSITIONS`；`requestId` 一经写入由唯一索引 + 状态机双重锁定；`findOpenAttempts` = dispatching / receipt_received；平台回执原文存 `attempts.receipt` | 完成 | |
+| 8 | 额度：policy timezone 算 `policyDay`；`action_not_allowed` / `outside_hours` / `daily_limit` / `min_interval`；held / consumed 不会被 release 改回 | 完成，契约 + T40 | |
+| 9 | 任一 SQLite 写错误（`SQLITE_*`）→ `writable=false`，之后所有写方法在进事务前就抛 `LedgerUnavailableError(reason)`；读继续可用；`diagnostics()` 返回版本 / 原因 / 最后错误 / quick_check / 大小 / 各表行数，并尽力导出 `<path>.diagnostics.json`（0600）。打开失败（非库文件、权限、更高版本）一律抛错，不建空库、不改原文件 | 完成，T38 | |
+| 10 | `readLegacyState(path)` → `{entries, sourceHash, droppedFields}`；只取 `handled`，去重去空，`wechatPid`/`mode` 等全部丢弃并列在 `droppedFields`；缺文件 = 空，坏文件 = `LegacyStateError`（不静默成空导入） | 完成，T39 | `src/legacy.ts` |
+| 11 | 库文件、`-wal`、`-shm`、诊断文件 0600；自建目录 0700（已存在的目录不改权限，避免误改用户目录） | 完成，有断言 | |
+
+### 测试（`npm test -w packages/ledger`：36 passed / 0 failed）
+
+- `test/contract.test.ts`：`packages/ports/test/ledger-contract.ts` 的 8 条契约用例跑在 SQLite 上 — passed。
+- `test/ledger.test.ts`：T05 ×2、持久化回读、分页、policy、account、权限、T38 ×3、T39 ×3、T40 ×4、close 语义。
+- `test/crash.test.ts`：崩溃边界 — (a) 提交前切断（`faultInjection.beforeCommit` 抛错回滚）覆盖 `TASK_TRANSITIONS` 全部 34 条边、`ATTEMPT_TRANSITIONS` 全部 6 条边，以及 intake / prepareAttempt / recordApproval / consumeApproval / reserveQuota / holdQuota / importLegacySuppressions / confirmAccount；每条都重开库断言状态、revision、audit 不变且随后可重做；(b) 子进程真 `SIGKILL`（`test/helpers/crash-child.ts`，`node --import tsx`）在 prepared / dispatching / receipt_received / 任务转换后各杀一次，重开库断言。
+- `test/legacy.test.ts`：T39 旧文件转换与导入。
+
+| 用例 | 状态 | 断言所在 |
+| --- | --- | --- |
+| T05 同 intent 一条任务 | passed | `ledger.test.ts` "T05: …" ×2（含两连接并发同 operationId） |
+| T07 prepared 后崩溃不自动派发 | passed | `crash.test.ts` "T07: killed after prepareAttempt …"（真 SIGKILL 子进程；重开后 attempt 仍 prepared、无 requestId、`findOpenAttempts` 为空） |
+| T38 注入写失败 → 停写 | passed | `ledger.test.ts` "T38: a real SQLITE_FULL …"（`max_page_count` 触发真实 `SQLITE_FULL`）、"T38: a file that is not a database …"、"T38: an unwritable file …" |
+| T39 高版本库拒绝；旧 handled 只成 suppression | passed | `ledger.test.ts` "T39: …" ×3、`legacy.test.ts` ×2 |
+| T40 跨日 / 并发预留 / unknown 不重复释放 | passed | `ledger.test.ts` "T40: …" ×4 |
+
+以上全部是 Fake / 夹具级别的单元断言，不含真机。
+
+### 跑过的命令
+
+- `npm install better-sqlite3@^12 -w packages/ledger`、`npm install -D @types/better-sqlite3 -w packages/ledger`：预编译二进制安装成功（SQLite 3.53.2），未走 node:sqlite 回退。
+- `npm run typecheck -w packages/ledger`、`npm test -w packages/ledger`：0 错误，36/36。
+- 根 `npm run check`：bans clean，9 个 workspace typecheck 全过，全部测试通过，退出码 0。
+- `scripts/check-ownership.sh b`：见 PR。
+
+### 未完成 / 需要协调者处理
+
+- **根 `package-lock.json`**：`npm install` 更新了它（better-sqlite3 及其依赖），但根文件归协调者，lane-b 分支**没有提交**它。合并时请在 `app-skeleton` 上跑一次 `npm install` 生成 lock（否则 `npm ci` 会报 lock 不同步）。
+- better-sqlite3 是原生模块：lane G 打包进 Electron 时需要 `electron-rebuild`/prebuild 对应 ABI；如果 G 的 spike 结论是原生模块不可接受，可改成 Node 22 内置 `node:sqlite`（`DatabaseSync` API 与 better-sqlite3 几乎同构，`src/sqlite-ledger.ts` 里只有 `new Database()`、`pragma()`、`transaction().immediate()` 三处要换）。
+- `SqliteLedger` 上有几个 `Ledger` 接口之外的方法（`listAudit`、`getApproval`、`getReceipt`、`getQuota`、`diagnostics`），其他 lane 通过 `Ledger` 类型拿不到；见下面的 INTERFACE REQUEST。
+
+INTERFACE REQUEST: `Ledger.diagnostics()` 需要加入 port（返回 `{ schemaVersion, writable, reason?, lastError?, quickCheck?, rows? }`），原因：lane E 的 `diagnostics.export` 要把账本健康与最后一次写失败放进诊断包，现在只能把 `Ledger` 向下转型成 `SqliteLedger`。
+INTERFACE REQUEST: `Ledger.getApproval(approvalId)` 需要加入 port，原因：lane D 在危险点击前"重新 observe 并校验审批版本"需要读审批而不消费它；lane F 任务详情页要显示审批是否已消费 / 过期。
+INTERFACE REQUEST: `Ledger.getReceipt(attemptId)` 需要加入 port（或 `ActionAttempt` 加 `receipt?: Record<string, unknown>`），原因：`recordReceipt` 收的平台回执只能存不能读，lane E 的 Recovery / `task.reconcile` 无法把回执里的 delivery / verification 拿出来核实。
