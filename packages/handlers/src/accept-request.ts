@@ -138,7 +138,7 @@ async function verifyAccepted(flow: Flow, approval: BusinessApproval, expectatio
       if (++dialogs > 2) flow.halt('needs_reconciliation', 'unexpected_dialog', 'the follow-up dialog keeps reappearing');
       // The approval covered the accept; the dialog click only closes WeChat's own remark/tag sheet.
       flow.requireSameWindow(scene);
-      flow.requireApprovalValid(approval, expectation, true);
+      flow.requireApprovalValid(await flow.reloadApproval(approval), expectation, true);
       await flow.act(`finish_dialog:${dialogs}`, { kind: 'click', target: { imagePoint: center(finish.rect) } }, scene, true);
       continue;
     }

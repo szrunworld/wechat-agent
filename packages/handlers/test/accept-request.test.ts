@@ -174,6 +174,29 @@ test('account revision mismatch, expired approval, rejection and cancellation ne
   assert.equal(cancelled.driver.countCalls('observe'), 0);
 });
 
+test('the approval is re-read from the ledger before the click: a consumed or missing one blocks', async () => {
+  const consumed = await harness({
+    task, facts: [list('pending'), detail(), detail()],
+    decide: async (request, h) => {
+      const approval = await h.ledger.recordApproval({ taskId: request.taskId, accountRevision: request.accountRevision, targetRevision: request.targetRevision, draftRevision: request.draftRevision, contentHash: request.contentHash, allowedAction: request.allowedAction, expiresAt: '2026-10-08T11:00:00+08:00', createdAt: '2026-10-08T10:00:00+08:00' });
+      await h.ledger.consumeApproval(approval.approvalId, { taskId: request.taskId, contentHash: request.contentHash, targetRevision: request.targetRevision, accountRevision: request.accountRevision }, '2026-10-08T10:00:01+08:00');
+      return { kind: 'approved', approval: { ...approval, consumedAt: undefined } };
+    },
+  });
+  const rc = await consumed.run();
+  assert.equal(rc.outcome, 'blocked');
+  assert.equal(rc.reasonCode, 'approval_invalid');
+  assert.equal(acts(consumed.driver).length, 1);
+  const missing = await harness({
+    task, facts: [list('pending'), detail(), detail()],
+    decide: (request) => ({ kind: 'approved', approval: { approvalId: 'appr_ghost', taskId: request.taskId, accountRevision: request.accountRevision, targetRevision: request.targetRevision, draftRevision: request.draftRevision, contentHash: request.contentHash, allowedAction: request.allowedAction, expiresAt: '2026-10-08T11:00:00+08:00', createdAt: '2026-10-08T10:00:00+08:00' } }),
+  });
+  const rm = await missing.run();
+  assert.equal(rm.outcome, 'blocked');
+  assert.equal(rm.reasonCode, 'approval_invalid');
+  assert.equal(acts(missing.driver).length, 1);
+});
+
 test('a window change during approval blocks the write', async () => {
   const other = observation({ target: { generation: 2, process: { pid: 999, startedAt: null }, windowId: 12, windowFrame: { x: 0, y: 25, width: 1280, height: 875 }, title: '微信' } });
   const h = await harness({ task, facts: [list('pending'), detail(), detail()], observations: [observation(), observation(), other] });

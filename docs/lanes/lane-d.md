@@ -38,7 +38,7 @@
 
 | 文件 | 内容 |
 | --- | --- |
-| `steps.ts` | `Flow`：observe → applicability → recognize → `putEvidence`（coverage=unreadable / profile 不适用 → `blocked(layout_unreadable)`）；`act()` 每次都做 signal → `writeGate.ensureOpen()` → `prepareAttempt` → `requestId = ctx.newId()` → `markDispatching` → `driver.act`；派发后异常 → `markUnknown` → `needs_reconciliation`（同 requestId 不重发）；`notSent=true` → `markUnknown('not_sent:<code>')` + 可重规划的 `blocked`；回执 delivery/execution=unknown → `needs_reconciliation`；`not_dispatched` → 按 reason 转 `blocked`/`failed`；审批校验（任务/动作/contentHash/target revision/account revision/过期/已消费）、`consumeApproval`、同窗口（pid+windowId）校验；`signal` → 危险动作前 `no_op(cancelled)`，之后 `needs_reconciliation(cancelled)`；流程结束不留半开 attempt（导航 attempt 在下一次 observe 后 verified，危险 attempt 无结论 → unknown）。 |
+| `steps.ts` | `Flow`：observe → applicability → recognize → `putEvidence`（coverage=unreadable / profile 不适用 → `blocked(layout_unreadable)`）；`act()` 每次都做 signal → `writeGate.ensureOpen()` → `prepareAttempt` → `requestId = ctx.newId()` → `markDispatching` → `driver.act`；派发后异常 → `markUnknown` → `needs_reconciliation`（同 requestId 不重发）；`notSent=true` → `markUnknown('not_sent:<code>')` + 可重规划的 `blocked`；回执 delivery/execution=unknown → `needs_reconciliation`；`not_dispatched` → 按 reason 转 `blocked`/`failed`；审批校验（任务/动作/contentHash/target revision/account revision/过期/已消费），危险动作前先 `ledger.getApproval` 重读账本副本再 `consumeApproval`（决策对象本身不被信任）、同窗口（pid+windowId）校验；`signal` → 危险动作前 `no_op(cancelled)`，之后 `needs_reconciliation(cancelled)`；流程结束不留半开 attempt（导航 attempt 在下一次 observe 后 verified，危险 attempt 无结论 → unknown）。 |
 | `navigate.ts` | `openNewFriends`：通讯录 → 新的朋友 逐步 observe-act-observe（≤3 跳）；任何 dialog → 停止（`unexpected_dialog` / 频繁→`rate_limited`），不点任意"确定"。 |
 | `read-requests.ts` | `list_read` fact（coverage、complete、每行 rowKey/status/confidence/hasAction）；零行且非 end_confirmed 不算处理完；partial → `coverage_partial`。 |
 | `accept-request.ts` | rowKey 定位（缺/重/低置信 → no_op/ambiguous）→ 打开详情（同名校验）→ `ApprovalRequest`（targetLabel、visibleIdentifier、留言、evidenceIds、identityConfidence）→ 重新 observe → verify-before-write → consume → 一次危险点击 → 后续对话框只允许备注/标签 sheet 的 完成/确定（其他文本一律停）→ 同一 rowKey 变 added 或详情同名出现 发消息 才 `confirmed`；行消失 → `needs_reconciliation`。 |
@@ -52,7 +52,7 @@
 ### 命令与结果
 
 - `npm run typecheck -w @wechat-agent/handlers`：通过。
-- `npm test -w @wechat-agent/handlers`：48 passed / 0 failed。
+- `npm test -w @wechat-agent/handlers`：49 passed / 0 failed（已合并 app-skeleton e357cd4，用上 `Ledger.getApproval`）。
 - 根 `npm run check`：退出码 0（bans clean，全部 workspace typecheck + test 通过）。
 - `scripts/check-ownership.sh d`：clean。
 
@@ -70,7 +70,7 @@
 | T27 空框无气泡 → unknown | passed | `send-message.test.ts`（sent_unconfirmed，attempt=unknown；旧同文气泡不算） |
 | T28 contextRevision 变化 → 重审 | passed | `send-message.test.ts`（审批后新入站 → blocked(approval_invalid)、0 act；输入中新入站 → 清理自己的文本后重审） |
 | 派发后断连 → unknown → 同 requestId 不重发 | passed | `accept-request.test.ts` + `send-message.test.ts`（act 次数不增、attempt.requestId == 派发的 requestId、state=unknown） |
-| 附加：notSent=true 可重规划、写门关闭、账号 revision 变化、审批过期、窗口变化、取消、unknown 回执、layout_unreadable、无截图 | passed | `accept-request.test.ts` / `registry.test.ts` / `read-requests.test.ts` |
+| 附加：notSent=true 可重规划、写门关闭、账号 revision 变化、审批过期、账本里审批已消费/不存在、窗口变化、取消、unknown 回执、layout_unreadable、无截图 | passed | `accept-request.test.ts` / `registry.test.ts` / `read-requests.test.ts` |
 
 ### 未完成 / 已知边界
 

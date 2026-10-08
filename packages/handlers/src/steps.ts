@@ -186,9 +186,16 @@ export class Flow {
     if (approval.consumedAt && !allowConsumed) this.halt('blocked', 'approval_invalid', 'approval already consumed');
   }
 
-  /** Single-use consumption right before the dangerous act. */
+  /** The ledger's own copy of the approval, re-read right before the dangerous act; the decision object alone is not trusted. */
+  async reloadApproval(approval: BusinessApproval): Promise<BusinessApproval> {
+    const stored = await this.ctx.ledger.getApproval(approval.approvalId);
+    if (!stored) this.halt('blocked', 'approval_invalid', `approval ${approval.approvalId} is not in the ledger`);
+    return stored;
+  }
+
+  /** Single-use consumption right before the dangerous act, validated against the ledger's copy. */
   async consumeApproval(approval: BusinessApproval, expected: ApprovalExpectation): Promise<BusinessApproval> {
-    this.requireApprovalValid(approval, expected);
+    this.requireApprovalValid(await this.reloadApproval(approval), expected);
     try {
       return await this.ctx.ledger.consumeApproval(approval.approvalId, {
         taskId: this.task.taskId, contentHash: expected.contentHash, targetRevision: expected.targetRevision, accountRevision: this.ctx.account.revision,
