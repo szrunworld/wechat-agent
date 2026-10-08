@@ -96,8 +96,19 @@ export interface Ledger {
   putEvidence(evidence: Omit<Evidence, 'evidenceId'>): Promise<Evidence>;
   getEvidence(evidenceId: Id): Promise<Evidence | undefined>;
 
+  /** Idempotent on (taskId, revision, payloadHash): the same intent enqueued twice is one event. */
   enqueueOutbox(event: Omit<OutboxEvent, 'eventId' | 'state'>): Promise<OutboxEvent>;
+  /** A terminal transition and its outbox event in one transaction; a refused transition leaves no event. */
+  transitionTaskWithOutbox(taskId: Id, to: TaskState, expectedRevision: Revision, now: Timestamp, reason: string | undefined,
+    outbox: (task: WeChatTask) => Omit<OutboxEvent, 'eventId' | 'state'>): Promise<{ task: WeChatTask; event: OutboxEvent }>;
+  /** Every pending event, oldest first, retryAt included: the deliverer decides what is due with its own clock. */
   pendingOutbox(limit?: number): Promise<OutboxEvent[]>;
+  /** A retryable failure: stays pending, attempts + 1, next try at retryAt. */
+  deferOutbox(eventId: Id, retryAt: Timestamp, error: string): Promise<OutboxEvent>;
+  /** Delivered (with the sink's receipt) or failed for good. */
+  settleOutbox(eventId: Id, state: 'delivered' | 'failed', detail: { receipt?: string; error?: string }, now: Timestamp): Promise<OutboxEvent>;
+  listOutbox(taskId: Id): Promise<OutboxEvent[]>;
+  /** @deprecated use deferOutbox / settleOutbox; kept for older callers. */
   markOutbox(eventId: Id, state: 'delivered' | 'failed', retryAt?: Timestamp): Promise<OutboxEvent>;
 
   getAccount(): Promise<AccountBinding | undefined>;

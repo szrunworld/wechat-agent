@@ -121,7 +121,7 @@ agent 提示词模板（每条 lane 替换 X 和任务书路径）：
 
 ## 8. 已知风险与提前决定
 
-- **阶段 3 结果（2026-10-08）**：8 条 lane 全部合并；真 app + 真 handlers + 真 SQLite 账本的 real-stack 集成测试通过（T05/T08/T16/T21/T31/T32/T36 Fake 级）。两条后续：Outbox 事件的写入方定为 App core（lane E 范围，未实现）；`FakeDriver` 新增 `endRunsOnDrop` 选项，开启后断连按 Delegated 语义结束其 Run（默认关，已有测试自行 `confirmQuiescence()`）；lane E 重连后只 `run.show` 不 `run.cancel` 的行为可据此复核。
+- **阶段 3 结果（2026-10-08）**：8 条 lane 全部合并；真 app + 真 handlers + 真 SQLite 账本的 real-stack 集成测试通过（T05/T08/T16/T21/T31/T32/T36 Fake 级）。两条后续：Outbox 事件的写入方定为 App core（lane E 范围）——**已实现**（分支 `task-outbox`：`packages/app/src/outbox.ts` 的 `OutboxWriter` 在每个终态转换与关键业务事实落账时入队，SQLite 账本把转换与事件写在同一事务（迁移 `0003_outbox_delivery.sql`，`(taskId, revision, payloadHash)` 唯一）；`OutboxDeliverer` 串行投递到可插拔 `OutboxSink`（首版 `FileSink` JSONL + 测试 `MemorySink`），按 eventId 幂等、指数退避、重启后从 `pendingOutbox` 恢复、结果写成 `reconciliation` fact（`data.kind='outbox_delivery'`）；崩溃/重试/并发矩阵在 `packages/app/test/outbox.test.ts`（fakes）与 `tests/integration/test/outbox.test.ts`（真 SQLite））；`FakeDriver` 新增 `endRunsOnDrop` 选项，开启后断连按 Delegated 语义结束其 Run（默认关，已有测试自行 `confirmQuiescence()`）；lane E 重连后只 `run.show` 不 `run.cancel` 的行为可据此复核。
 
 - **壳选型**：方案建议 Electron + React（D 级设计）。本计划按它启动 F/G；若 lane G 的 spike 结论是体积/签名不可接受，F 的 React 视图与 IPC schema 不变，只换壳。
 - **端点不一致**：冻结文档说 `control.sock`，acp 分支 EndpointResolver 仍是 `runtime.sock`。lane A 把端点做成显式配置项，默认按冻结文档，不做回退探测；真机前由协调者确认发行分支。

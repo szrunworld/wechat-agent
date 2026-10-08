@@ -5,6 +5,7 @@ import { DriverError, IpcFailure, LedgerConflictError, LedgerUnavailableError, W
 import type {
   AccountBinding, AgentDesktopDriver, ApplicationService, AppSnapshot, HandlerRegistry, Id, IpcMethod, IpcMethods, Ledger, Recognizer, TaskView, Timestamp,
 } from '@wechat-agent/ports';
+import path from 'node:path';
 import { resolveConfig, type AppConfig } from './config.ts';
 import { RuntimeConnector } from './connector.ts';
 import { exportDiagnostics } from './diagnostics.ts';
@@ -12,6 +13,7 @@ import { Dispatcher } from './dispatcher.ts';
 import { computeFeatures, type FeatureMap } from './features.ts';
 import { InputGate } from './gate.ts';
 import { SingleInstanceLock } from './lock.ts';
+import { FileSink, OutboxDeliverer, OutboxWriter, type OutboxSink } from './outbox.ts';
 import { Patrol } from './patrol.ts';
 import { recoverOpenAttempts } from './recovery.ts';
 import { errorMessage, newId, realScheduler, sha256, type Scheduler } from './support.ts';
@@ -28,6 +30,8 @@ export interface ApplicationDeps {
   config?: Partial<AppConfig>;
   scheduler?: Scheduler;
   log?: (line: string) => void;
+  /** Where outbox events are delivered. Default: a JSONL file under `config.dataDir`. */
+  outboxSink?: OutboxSink;
 }
 
 export interface ApplicationInternals {
@@ -36,6 +40,9 @@ export interface ApplicationInternals {
   gate: InputGate;
   dispatcher: Dispatcher;
   patrol: Patrol;
+  /** The outbox delivery loop (serial, idempotent per eventId; never touches the driver). */
+  outbox: OutboxDeliverer;
+  outboxWriter: OutboxWriter;
   /** Resolves when no handler runs and nothing startable is queued. */
   idle(): Promise<void>;
   snapshot(): Promise<AppSnapshot>;
@@ -59,6 +66,8 @@ export class WeChatAgentApplication implements Application {
   private readonly gate: InputGate;
   private readonly dispatcher: Dispatcher;
   private readonly patrol: Patrol;
+  private readonly outbox: OutboxDeliverer;
+  private readonly outboxWriter: OutboxWriter;
   private readonly scheduler: Scheduler;
   private readonly lock: SingleInstanceLock | undefined;
   private readonly listeners = new Set<(snapshot: AppSnapshot) => void>();
@@ -90,9 +99,15 @@ export class WeChatAgentApplication implements Application {
       onChange: () => this.scheduleSnapshot(),
       log,
     });
+    this.outbox = new OutboxDeliverer({
+      ledger: deps.ledger, sink: deps.outboxSink ?? new FileSink(path.join(this.config.dataDir, 'outbox.jsonl'), this.now), now: this.now, scheduler: this.scheduler, log,
+      backoff: this.config.outbox,
+      onEvent: (taskId, label, at) => { this.dispatcher.runtimeFor(taskId).timeline.push({ at, label }); this.scheduleSnapshot(); },
+    });
+    this.outboxWriter = new OutboxWriter({ ledger: deps.ledger, log, onEnqueued: () => this.outbox.kick() });
     this.dispatcher = new Dispatcher({
       driver: deps.driver, ledger: deps.ledger, recognizer: deps.recognizer, handlers: deps.handlers, gate: this.gate, connector: this.connector,
-      config: this.config, now: this.now, features: () => this.features(), log, onChange: () => this.scheduleSnapshot(),
+      config: this.config, outbox: this.outboxWriter, now: this.now, features: () => this.features(), log, onChange: () => this.scheduleSnapshot(),
     });
     this.patrol = new Patrol({
       ledger: deps.ledger, dispatcher: this.dispatcher, gate: this.gate, connector: this.connector, scheduler: this.scheduler,
@@ -110,7 +125,7 @@ export class WeChatAgentApplication implements Application {
       subscribe: (listener) => this.subscribe(listener),
     };
     this.internals = {
-      config: this.config, connector: this.connector, gate: this.gate, dispatcher: this.dispatcher, patrol: this.patrol,
+      config: this.config, connector: this.connector, gate: this.gate, dispatcher: this.dispatcher, patrol: this.patrol, outbox: this.outbox, outboxWriter: this.outboxWriter,
       idle: () => this.dispatcher.idle(), snapshot: () => this.buildSnapshot(), log: this.logLines,
     };
   }
@@ -125,6 +140,8 @@ export class WeChatAgentApplication implements Application {
     this.gate.setAccount(account?.status === 'confirmed');
     const policy = await this.deps.ledger.getPolicy();
     this.patrol.start(policy.patrolIntervalSeconds, this.config.patrolEnabled);
+    // Whatever a previous process left pending is delivered now, independent of the platform connection.
+    this.outbox.start();
     await this.connector.connect();
     await this.publish();
   }
@@ -133,6 +150,7 @@ export class WeChatAgentApplication implements Application {
     if (!this.started) return;
     this.started = false;
     this.patrol.stop();
+    this.outbox.stop();
     this.dispatcher.abortAll();
     await this.connector.stop();
     if (this.lock) await this.lock.release();

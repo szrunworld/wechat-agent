@@ -21,6 +21,8 @@ export interface AppConfig {
   approvalTtlSeconds: number;
   /** One read-only ReadRequests task after the account is confirmed (setup step `baseline`). */
   baselineOnConnect: boolean;
+  /** Outbox delivery: exponential backoff for retryable sink failures, the cap, the per-delivery timeout. */
+  outbox: { baseMs: number; maxMs: number; maxAttempts: number; deliverTimeoutMs: number };
   client: { name: string; version: string };
 }
 
@@ -34,11 +36,15 @@ export const DEFAULT_CONFIG: AppConfig = {
   evidenceRetentionDays: 30,
   approvalTtlSeconds: 600,
   baselineOnConnect: true,
+  outbox: { baseMs: 1_000, maxMs: 300_000, maxAttempts: 12, deliverTimeoutMs: 10_000 },
   client: { name: 'wechat-agent', version: '0.1.0' },
 };
 
 export function resolveConfig(partial: Partial<AppConfig> = {}): AppConfig {
-  const merged: AppConfig = { ...DEFAULT_CONFIG, ...partial, reconnect: { ...DEFAULT_CONFIG.reconnect, ...partial.reconnect }, client: { ...DEFAULT_CONFIG.client, ...partial.client } };
+  const merged: AppConfig = {
+    ...DEFAULT_CONFIG, ...partial, reconnect: { ...DEFAULT_CONFIG.reconnect, ...partial.reconnect }, outbox: { ...DEFAULT_CONFIG.outbox, ...partial.outbox },
+    client: { ...DEFAULT_CONFIG.client, ...partial.client },
+  };
   if (partial.lockPath === undefined) merged.lockPath = partial.dataDir ? path.join(merged.dataDir, 'instance.lock') : null;
   return merged;
 }

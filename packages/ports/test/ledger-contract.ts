@@ -124,6 +124,30 @@ export function runLedgerContract(open: () => Promise<Ledger>): void {
     await ledger.close();
   });
 
+  test('outbox: idempotent enqueue, atomic terminal transition, defer keeps pending, settle ends it', async () => {
+    const ledger = await open();
+    const { task } = await ledger.intake(intake(), T0);
+    const queued = await ledger.transitionTask(task.taskId, 'queued', 1, T0);
+    const draft = (t: typeof task) => ({ taskId: t.taskId, revision: t.revision, payloadHash: 'h1', payload: { kind: 'task_final', state: t.state } });
+    await assert.rejects(ledger.transitionTaskWithOutbox(task.taskId, 'cancelled', 99, T1, undefined, draft), (e: unknown) => e instanceof LedgerConflictError);
+    assert.deepEqual(await ledger.listOutbox(task.taskId), [], 'a refused transition leaves no event');
+    const { task: ended, event } = await ledger.transitionTaskWithOutbox(task.taskId, 'cancelled', queued.revision, T1, 'test', draft);
+    assert.equal(ended.state, 'cancelled');
+    const again = await ledger.enqueueOutbox(draft(ended));
+    assert.equal(again.eventId, event.eventId, 'same (taskId, revision, payloadHash) is one event');
+    assert.equal((await ledger.listOutbox(task.taskId)).length, 1);
+    assert.equal((await ledger.pendingOutbox()).some((e) => e.eventId === event.eventId), true);
+    const deferred = await ledger.deferOutbox(event.eventId, '2999-01-01T00:00:00+08:00', 'sink down');
+    assert.equal(deferred.state, 'pending');
+    assert.equal(deferred.attempts, 1);
+    const stillPending = (await ledger.pendingOutbox()).find((e) => e.eventId === event.eventId);
+    assert.equal(stillPending?.retryAt, '2999-01-01T00:00:00+08:00', 'deferred events stay listed with their retryAt; the deliverer decides what is due');
+    const settled = await ledger.settleOutbox(event.eventId, 'delivered', { receipt: 'r1' }, T1);
+    assert.equal(settled.state, 'delivered');
+    assert.equal(settled.receipt, 'r1');
+    await ledger.close();
+  });
+
   test('legacy keys become suppressions only', async () => {
     const ledger = await open();
     const added = await ledger.importLegacySuppressions([{ key: '陈一|我是陈一', sourceHash: 'h' }, { key: '陈一|我是陈一', sourceHash: 'h' }], T0);
