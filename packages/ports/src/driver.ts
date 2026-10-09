@@ -60,7 +60,63 @@ export type RuntimeResponse<D = Record<string, unknown>> =
   | { apiVersion: typeof RUNTIME_API_VERSION; requestId: Id; ok: true; data: D }
   | { apiVersion: typeof RUNTIME_API_VERSION; requestId: Id | null; ok: false; error: RuntimeError };
 
-export interface Principal { clientId: string; role: 'owner' | 'paired'; connectionId: Id }
+/**
+ * Who the Runtime holds this connection to be (A4, agentdesktop #137): decided by the Runtime from the
+ * handshake credential, never by anything this app claims. A socket client is never `owner`.
+ */
+export interface Principal {
+  clientId: string;
+  role: 'owner' | 'paired' | 'unpaired';
+  connectionId: Id;
+  /** How far the Runtime can tell this program from other processes of the user (an Electron app is `shared_interpreter`). */
+  codeIdentityLevel?: 'verified' | 'shared_interpreter' | 'same_user' | 'in_process';
+}
+
+/** A paired client's credential (`adt1_…` token). Shown in runtime.handshake only; never logged or put in a snapshot. */
+export interface Credential { clientId: string; token: string }
+
+export type GrantCapability = 'observe' | 'act' | 'desktop.manage' | 'run' | 'unit.run';
+
+/** What hub.pairing.start asks the person to allow; the Runtime grants exactly this or nothing. */
+export interface GrantRequest {
+  capabilities: GrantCapability[];
+  /** Desktop ids, or "created" (Desktops this client created). */
+  desktops?: string[];
+  /** Bundle ids this client may bind or launch. */
+  apps?: string[];
+  durationSeconds?: number;
+}
+
+export interface HubGrant {
+  clientId: string;
+  capabilities: GrantCapability[];
+  desktops: string[];
+  apps: string[];
+  expiresAt: Timestamp;
+  revision: number;
+  state: 'active' | 'revoked';
+}
+
+export interface PairingStartParams { agentName: string; publisher?: string; requested: GrantRequest }
+export interface PairingStarted { pairingId: Id; shortCode: string; state: 'requested'; expiresAt: Timestamp }
+export interface PairingStatus {
+  pairingId: Id;
+  state: 'requested' | 'approved' | 'denied' | 'expired';
+  expiresAt: Timestamp;
+  clientId?: string;
+  /** Handed once, to the connection that asked, when the pairing is approved. */
+  credential?: Credential;
+  grant?: HubGrant;
+}
+
+/** Where the app keeps its credential. Tests use memory or a 0600 file; never the login keychain. */
+export interface StoredCredential extends Credential { grant?: HubGrant; pairedAt: Timestamp }
+export interface CredentialStore {
+  readonly kind: 'memory' | 'file' | 'keychain';
+  load(): Promise<StoredCredential | null>;
+  save(credential: StoredCredential): Promise<void>;
+  clear(): Promise<void>;
+}
 
 export interface RuntimeIdentity {
   product: string;
@@ -206,8 +262,12 @@ export type DriverState = 'disconnected' | 'connecting' | 'connected' | 'incompa
  */
 export interface AgentDesktopDriver {
   readonly state: DriverState;
-  /** Opens the control connection and performs runtime.handshake; refuses a product/apiVersion mismatch. */
-  connect(): Promise<HandshakeResult>;
+  /**
+   * Opens the control connection and performs runtime.handshake; refuses a product/apiVersion mismatch.
+   * `credential` is shown in the handshake (and in every subscription's handshake) until the next connect;
+   * without one the connection is unpaired.
+   */
+  connect(options?: { credential?: Credential | null }): Promise<HandshakeResult>;
   close(): Promise<void>;
   capabilities(): Promise<Capabilities>;
   status(): Promise<Record<string, unknown>>;
@@ -234,4 +294,8 @@ export interface AgentDesktopDriver {
   /** Reads in chunks of at most MAX_ARTIFACT_CHUNK_BYTES and verifies byteSize and sha256. */
   readArtifact(artifactId: Id): Promise<Uint8Array>;
   subscribe(params?: { runId?: Id; after?: number }): Promise<EventStream>;
+  /** hub.pairing.start: asks the person, in AgentDesktop's trusted window, to pair this app. */
+  startPairing(params: PairingStartParams): Promise<PairingStarted>;
+  /** hub.pairing.status on the same connection that asked; an approved pairing carries the credential once. */
+  pairingStatus(pairingId: Id): Promise<PairingStatus>;
 }

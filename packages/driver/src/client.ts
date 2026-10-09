@@ -6,9 +6,9 @@ import {
   DEFAULT_RUNTIME_ENDPOINT, DriverError, EXPECTED_PRODUCT, MAX_ARTIFACT_CHUNK_BYTES, RUNTIME_API_VERSION,
 } from '@wechat-agent/ports';
 import type {
-  Action, ActionReceipt, AgentDesktopDriver, Artifact, Capabilities, CancelReceipt, Desktop, DriverConfig, DriverState,
-  EventFrame, EventStream, HandshakeResult, Id, Observation, Principal, RequestContext, RequestRecord, Run, RuntimeIdentity,
-  RuntimeRequest, Session, WaitCondition, WaitResult, Window,
+  Action, ActionReceipt, AgentDesktopDriver, Artifact, Capabilities, CancelReceipt, Credential, Desktop, DriverConfig, DriverState,
+  EventFrame, EventStream, HandshakeResult, Id, Observation, PairingStartParams, PairingStarted, PairingStatus, Principal, RequestContext,
+  RequestRecord, Run, RuntimeIdentity, RuntimeRequest, Session, WaitCondition, WaitResult, Window,
 } from '@wechat-agent/ports';
 import { RpcConnection } from './connection.ts';
 import { requestProblems, stripUndefined } from './schema.ts';
@@ -65,8 +65,11 @@ async function rawCall<T = Record<string, unknown>>(conn: RpcConnection, method:
   return response.data as T;
 }
 
-async function performHandshake(conn: RpcConnection, client: DriverConfig['client'], timeoutMs: number): Promise<HandshakeResult> {
-  const raw = await rawCall<Record<string, unknown>>(conn, 'runtime.handshake', { apiVersions: [RUNTIME_API_VERSION], client }, {}, timeoutMs);
+/** The credential, when there is one, goes only into runtime.handshake (A4); requests never carry it. */
+async function performHandshake(conn: RpcConnection, client: DriverConfig['client'], timeoutMs: number, credential: Credential | null): Promise<HandshakeResult> {
+  const params: Record<string, unknown> = { apiVersions: [RUNTIME_API_VERSION], client };
+  if (credential) params.credential = { clientId: credential.clientId, token: credential.token };
+  const raw = await rawCall<Record<string, unknown>>(conn, 'runtime.handshake', params, {}, timeoutMs);
   const { principal, ...identity } = raw as Record<string, unknown> & { principal?: Principal };
   const apiVersions = Array.isArray(identity.apiVersions) ? (identity.apiVersions as unknown[]) : [];
   if (identity.product !== EXPECTED_PRODUCT) {
@@ -131,6 +134,8 @@ class Driver implements AgentDesktopDriver {
   private readonly endpoint: string;
   private readonly requestTimeoutMs: number;
   private readonly connectTimeoutMs: number;
+  /** Shown in this connection's handshake and in every subscription's; replaced by the next connect(). */
+  private credential: Credential | null = null;
 
   constructor(private readonly config: DriverConfig) {
     this.endpoint = resolveEndpoint(config.endpoint);
@@ -138,9 +143,10 @@ class Driver implements AgentDesktopDriver {
     this.connectTimeoutMs = config.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
   }
 
-  async connect(): Promise<HandshakeResult> {
+  async connect(options?: { credential?: Credential | null }): Promise<HandshakeResult> {
     if (this.state === 'connected' || this.state === 'connecting') throw local('invalid_argument', `connect() called while ${this.state}`);
     this.state = 'connecting';
+    this.credential = options?.credential ? { clientId: options.credential.clientId, token: options.credential.token } : null;
     let conn: RpcConnection;
     try {
       conn = await RpcConnection.connect(this.endpoint, this.connectTimeoutMs);
@@ -149,7 +155,7 @@ class Driver implements AgentDesktopDriver {
       throw error;
     }
     try {
-      const result = await performHandshake(conn, this.config.client, this.requestTimeoutMs);
+      const result = await performHandshake(conn, this.config.client, this.requestTimeoutMs, this.credential);
       this.conn = conn;
       this.state = 'connected';
       conn.onClose = () => {
@@ -170,6 +176,7 @@ class Driver implements AgentDesktopDriver {
     const conn = this.conn;
     this.conn = null;
     this.state = 'closed';
+    this.credential = null;
     for (const sub of [...this.subscriptions]) sub.destroy();
     this.subscriptions.clear();
     if (conn) await conn.close();
@@ -299,6 +306,14 @@ class Driver implements AgentDesktopDriver {
     return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   }
 
+  startPairing(params: PairingStartParams): Promise<PairingStarted> {
+    return this.call<PairingStarted>('hub.pairing.start', { agentName: params.agentName, publisher: params.publisher, requested: params.requested });
+  }
+
+  pairingStatus(pairingId: Id): Promise<PairingStatus> {
+    return this.call<PairingStatus>('hub.pairing.status', { pairingId });
+  }
+
   /** Own connection + own handshake; the control connection is untouched by its life or death. */
   async subscribe(params?: { runId?: Id; after?: number }): Promise<EventStream> {
     const conn = await RpcConnection.connect(this.endpoint, this.connectTimeoutMs);
@@ -317,7 +332,7 @@ class Driver implements AgentDesktopDriver {
       queue.end(); // a dropped subscription ends the iterator; the caller re-subscribes from `cursor`
     };
     try {
-      await performHandshake(conn, this.config.client, this.requestTimeoutMs);
+      await performHandshake(conn, this.config.client, this.requestTimeoutMs, this.credential);
       const ack = await rawCall<{ subscribed: boolean; runId?: Id; next?: number }>(conn, 'events.subscribe', { runId: params?.runId, after: params?.after }, {}, this.requestTimeoutMs);
       if (typeof ack.next === 'number') cursor = ack.next;
     } catch (error) {

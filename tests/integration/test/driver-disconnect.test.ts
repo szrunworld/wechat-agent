@@ -130,7 +130,7 @@ const detailPage = (): PageFacts => pageFacts({
 const acceptStack = (): PageFacts[] => [newFriendsPage([requestRow(NAME, 'pending')]), detailPage(), detailPage(), newFriendsPage([requestRow(NAME, 'added')])];
 
 async function pairedStack(t: TestContext, fake: FakeRuntimeOptions = {}): Promise<FakeStack> {
-  return startFakeStack(t, { fake: { principal: { clientId: 'app:wechat-agent', role: 'paired' }, ...fake }, facts: acceptStack() });
+  return startFakeStack(t, { fake, facts: acceptStack() });
 }
 
 test('app T08 over the wire: the socket dies after the dangerous act → attempt unknown with the persisted requestId, gate quiescence_unconfirmed, task stopping; reconnect only looks (run.show), settles needs_reconciliation; reconcile asks request.show with the same requestId; nothing re-sent', async (t) => {

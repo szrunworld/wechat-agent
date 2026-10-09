@@ -6,7 +6,7 @@
 import { DriverError } from '@wechat-agent/ports';
 import type { ActionAttempt, AgentDesktopDriver, Id, Ledger, RequestRecord, Run, Timestamp } from '@wechat-agent/ports';
 import type { Dispatcher } from './dispatcher.ts';
-import { isConnectionError } from './connector.ts';
+import { isPlatformLost } from './connector.ts';
 import { errorMessage } from './support.ts';
 import { isTerminal } from './tasks.ts';
 
@@ -47,7 +47,7 @@ export async function recoverOpenAttempts(deps: RecoveryDeps): Promise<RecoveryR
         record = await driver.showRequest(attempt.requestId);
         requestState = record.state;
       } catch (error) {
-        if (isConnectionError(error)) { log('recovery: platform dropped; remaining attempts stay open'); return reports; }
+        if (isPlatformLost(error)) { log('recovery: platform dropped; remaining attempts stay open'); return reports; }
         requestState = error instanceof DriverError && error.error.code === 'not_found' ? 'not_found' : 'error';
         log(`recovery: request.show ${attempt.requestId}: ${errorMessage(error)}`);
       }
@@ -55,7 +55,7 @@ export async function recoverOpenAttempts(deps: RecoveryDeps): Promise<RecoveryR
     let run: Run | undefined;
     if (attempt.runId) {
       try { run = await driver.showRun(attempt.runId); } catch (error) {
-        if (isConnectionError(error)) return reports;
+        if (isPlatformLost(error)) return reports;
       }
     }
 

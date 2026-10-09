@@ -10,9 +10,34 @@ export type FeatureKey = 'read_list' | 'accept_request' | 'add_friend' | 'reply_
 
 export type FeatureState =
   | { enabled: true }
-  | { enabled: false; reason: 'pairing_missing' | 'capability_missing' | 'policy_disabled' | 'platform_offline' | 'account_unconfirmed' | 'input_gate_closed'; detail?: string };
+  | { enabled: false; reason: 'pairing_missing' | 'grant_missing' | 'capability_missing' | 'policy_disabled' | 'platform_offline' | 'account_unconfirmed' | 'input_gate_closed'; detail?: string };
 
-export type ConnectionState = 'disconnected' | 'connecting' | 'incompatible' | 'unpaired' | 'ready';
+/**
+ * `unpaired`: connected without a credential; the Runtime answers nothing but pairing (A4).
+ * `pairing`: unpaired, a pairing request waits for the person in AgentDesktop.
+ * `ready`: paired; what the app may reach is still only what the grant covers.
+ * `no_access`: paired, but the grant is missing or expired; no reconnect loop, the person renews it.
+ * `revoked`: the credential was revoked or no longer proves this app; nothing reconnects until the person pairs again.
+ */
+export type ConnectionState = 'disconnected' | 'connecting' | 'incompatible' | 'unpaired' | 'pairing' | 'ready' | 'no_access' | 'revoked';
+
+/** The pairing as the person sees it. Never carries the credential. */
+export interface PairingView {
+  state: 'unpaired' | 'waiting' | 'paired' | 'denied' | 'expired' | 'revoked' | 'no_access';
+  /** The six digits the AgentDesktop confirmation window shows; compare before approving. */
+  shortCode?: string;
+  /** While waiting: when the request lapses. */
+  expiresAt?: Timestamp;
+  clientId?: string;
+  codeIdentityLevel?: string;
+  /** The grant as approved (from hub.pairing.status), when known. */
+  grant?: { capabilities: string[]; desktops: string[]; apps: string[]; expiresAt: Timestamp };
+  /** No new request before this time (the Runtime refuses one for a minute after a refusal). */
+  retryAfter?: Timestamp;
+  /** The last refusal from the Runtime, in words a person can act on, with its machine code. */
+  refusal?: { code: string; reason?: string; message: string; at: Timestamp };
+  detail?: string;
+}
 
 export type InputGateState = 'open' | 'closed' | 'stopping' | 'quiescence_unconfirmed';
 
@@ -48,6 +73,7 @@ export interface AppSnapshot {
     product?: string;
     apiVersion?: string;
     principal?: { clientId: string; role: string };
+    pairing: PairingView;
     missingCapabilities: string[];
     steps: SetupStep[];
   };
@@ -64,6 +90,8 @@ export interface AppSnapshot {
 export interface IpcMethods {
   'app.getSnapshot': { params: Record<string, never>; result: AppSnapshot };
   'connection.check': { params: Record<string, never>; result: { state: ConnectionState; apiVersion?: string; methods: string[]; missingCapabilities: string[] } };
+  /** Asks AgentDesktop to pair this app (the person confirms there with Touch ID); then waits for the answer. */
+  'pairing.start': { params: Record<string, never>; result: PairingView };
   'account.confirm': { params: { bindingEvidenceId: Id; expectedRevision?: Revision }; result: AccountBinding };
   'task.create': { params: { operationId: string; type: TaskType; targetId?: Id; payload: TaskPayload; expectedAccountRevision: Revision }; result: TaskView };
   'task.list': { params: { cursor?: string; limit?: number }; result: { tasks: TaskView[]; next?: string } };
@@ -86,7 +114,7 @@ export type IpcMethod = keyof IpcMethods;
 
 /** The preload whitelist. Nothing else crosses the renderer boundary. */
 export const IPC_METHODS: readonly IpcMethod[] = [
-  'app.getSnapshot', 'connection.check', 'account.confirm', 'task.create', 'task.list', 'task.show', 'task.draft',
+  'app.getSnapshot', 'connection.check', 'pairing.start', 'account.confirm', 'task.create', 'task.list', 'task.show', 'task.draft',
   'task.approve', 'task.skip', 'task.cancel', 'app.pause', 'app.resume', 'task.reconcile', 'task.concludeManually',
   'window.requestHandback', 'diagnostics.export', 'evidence.read',
 ];

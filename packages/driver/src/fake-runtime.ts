@@ -15,8 +15,12 @@ import type {
   ActionReceipt, Artifact, Element, ErrorPhase, Id, Principal, Rect, RequestContext, RequestRecord, Run, RunEvent, RuntimeError,
   RuntimeIdentity, RuntimeResponse, Session, Timestamp,
 } from '@wechat-agent/ports';
+import { FakeHub, HubRefusal, type FakeA4Options, type HubConnection } from './fake-hub.ts';
 import { encodeFrame, LineDecoder } from './framing.ts';
-import { canonicalJson, ERROR_CODES, METHODS, validator } from './schema.ts';
+import { ALL_IMPLEMENTED_METHODS, canonicalJson, ERROR_CODES, validator } from './schema.ts';
+
+/** What the fake answers: the snapshot's implemented methods except the platform's own service families. */
+const FAKE_METHODS = new Map([...ALL_IMPLEMENTED_METHODS].filter(([m]) => !/^(ai|gui\.runs)\./.test(m)));
 
 /** `onCall` absent: the fault fires on the next call of `method`; set: on that absolute call number (1-based). One-shot unless `sticky`. */
 export type FakeFault =
@@ -36,8 +40,17 @@ export interface FakeRuntimeOptions {
   identity?: Partial<RuntimeIdentity>;
   /** Answer the handshake even when the client's apiVersions share nothing with ours (lets tests see the client refuse). */
   acceptAnyApiVersion?: boolean;
-  /** Principal reported with the handshake; `null` omits it (the frozen RuntimeIdentity has no principal yet). */
+  /**
+   * Pre-A4 only: the principal reported with the handshake; `null` omits it. Ignored when `a4` is set,
+   * where the principal comes from the handshake credential as on the real Runtime.
+   */
   principal?: Omit<Principal, 'connectionId'> | null;
+  /**
+   * A4 (agentdesktop #137) as the real Runtime enforces it on runtime.sock: unpaired connections may only
+   * pair, paired ones only what their grant covers; the test plays the person (approve / deny via `hub`).
+   * Off by default: the older lane tests run against the open pre-A4 behaviour.
+   */
+  a4?: FakeA4Options | true;
   features?: string[];
   /** Cursors below this value are gone: events.subscribe with a smaller `after` returns events_cursor_expired. */
   retainedEventsFrom?: number;
@@ -75,6 +88,8 @@ interface Conn {
   runIds: Set<Id>;
   chain: Promise<void>;
   alive: boolean;
+  /** Who this connection is (A4); `unpaired` until a credential proves otherwise. */
+  who: HubConnection;
 }
 
 interface DesktopState {
@@ -82,6 +97,8 @@ interface DesktopState {
   screen: { displayId: number; frame: Rect; hiDPI: boolean };
   binding: { generation: number; process: { pid: number; startedAt: Timestamp | null }; windowId: number; appName: string; boundAt: Timestamp } | null;
   generation: number;
+  /** The clientId that created it (A4 grants may name "created"); the default Desktop is the owner's. */
+  createdBy: string;
 }
 
 interface WindowState { windowId: number; process: { pid: number; startedAt: Timestamp | null }; appName: string; bundleId: string | null; title: string | null; frame: Rect; onScreen: boolean }
@@ -119,6 +136,9 @@ export class FakeRuntime {
   admission: 'enabled' | 'stopping' | 'stopped' = 'enabled';
   /** Total connections ever accepted (T34: no silent reconnects). */
   connectionsAccepted = 0;
+  /** A4 state and the person's controls (approve, deny, revoke, setGrant, expireGrant). Enforced only with `a4`. */
+  readonly hub: FakeHub;
+  private readonly a4: boolean;
 
   private readonly server: net.Server;
   private readonly conns = new Map<Id, Conn>();
@@ -127,7 +147,8 @@ export class FakeRuntime {
   private readonly calls = new Map<string, number>();
   private readonly globalEvents: { cursor: number; event: RunEvent }[] = [];
   private globalCursor = 0;
-  private counter = 0;
+  // Starts past 1: the default Desktop is desk_1.
+  private counter = 1;
   private readonly tempDir: string | null;
   private readonly startedAt = now();
 
@@ -158,9 +179,15 @@ export class FakeRuntime {
     const desktop: DesktopState = {
       desktopId: 'desk_1', name: 'wechat-fake', state: 'ready', createdAt: now(),
       screen: { displayId: 1, frame: { x: 0, y: 0, width: 1280, height: 900 }, hiDPI: true },
-      binding: null, generation: 0,
+      binding: null, generation: 0, createdBy: 'local:501',
     };
     this.desktops.set(desktop.desktopId, desktop);
+    this.a4 = options.a4 !== undefined;
+    this.hub = new FakeHub(options.a4 === true || options.a4 === undefined ? {} : options.a4, {
+      cut: (clientId, reason) => this.cut(clientId, reason),
+      desktopCreator: (desktopId) => this.desktops.get(desktopId)?.createdBy,
+      bundleOfPid: (pid) => this.windows.find((w) => w.process.pid === pid)?.bundleId,
+    });
     if (options.bound !== false) this.bind(desktop, this.windows[0]);
     this.server = net.createServer((socket) => this.accept(socket));
   }
@@ -260,7 +287,11 @@ export class FakeRuntime {
 
   private accept(socket: net.Socket): void {
     this.connectionsAccepted += 1;
-    const conn: Conn = { id: this.id('conn'), socket, decoder: new LineDecoder(), handshaken: false, subscription: null, runIds: new Set(), chain: Promise.resolve(), alive: true };
+    const id = `conn_${randomBytes(8).toString('hex')}`;
+    const conn: Conn = {
+      id, socket, decoder: new LineDecoder(), handshaken: false, subscription: null, runIds: new Set(), chain: Promise.resolve(), alive: true,
+      who: { id, clientId: `unpaired:${id}`, role: 'unpaired' },
+    };
     this.conns.set(conn.id, conn);
     socket.on('data', (chunk: Buffer) => {
       if (!conn.alive) return;
@@ -283,6 +314,7 @@ export class FakeRuntime {
     socket.on('close', () => {
       conn.alive = false;
       this.conns.delete(conn.id);
+      this.hub.connectionClosed(conn.id);
       // Delegated Runs are connection-scoped: losing the control connection ends them
       // (or parks them stopping until quiescence, when the options say so).
       for (const runId of conn.runIds) {
@@ -338,7 +370,11 @@ export class FakeRuntime {
       this.write(conn, this.errorResponse(request.requestId, 'conflict', 'this connection is subscribed to events; events.unsubscribe first'));
       return;
     }
-    const spec = METHODS.get(request.method);
+    if (this.a4 && conn.handshaken && request.method === 'runtime.handshake') {
+      this.write(conn, this.errorResponse(request.requestId, 'conflict', 'this connection already completed runtime.handshake', { phase: 'handshake', details: { reason: 'already_handshaken' } }));
+      return;
+    }
+    const spec = FAKE_METHODS.get(request.method);
     if (!spec) {
       this.write(conn, this.errorResponse(request.requestId, 'capability_missing', `${request.method} is not implemented by this Runtime`, { phase: 'request' }));
       return;
@@ -347,6 +383,16 @@ export class FakeRuntime {
     if (paramProblems.length) {
       this.write(conn, this.errorResponse(request.requestId, 'schema_invalid', `${request.method} params: ${paramProblems.join('; ')}`, { phase: 'request', details: { problems: paramProblems } }));
       return;
+    }
+
+    if (this.a4) {
+      try {
+        this.hub.authorize(request.method, context, request.params, conn.who);
+      } catch (error) {
+        if (!(error instanceof HubRefusal)) throw error;
+        this.write(conn, this.errorResponse(request.requestId, error.code, error.message, error.extra));
+        return;
+      }
     }
 
     // Request ledger: mutations keyed by requestId, digest of {method, context, params}.
@@ -377,9 +423,13 @@ export class FakeRuntime {
     try {
       const data = await this.dispatch(conn, request.method, context, request.params, request.requestId, fault?.kind === 'receipt' ? fault.receipt : undefined);
       response = { apiVersion: RUNTIME_API_VERSION, requestId: request.requestId, ok: true, data };
+      // A4: access lost while the request ran (revoked, expired, narrowed): the answer is withheld.
+      const lost = this.a4 ? this.hub.accessLost(request.method, conn.who) : undefined;
+      if (lost) response = this.errorResponse(request.requestId, lost.code, lost.message, lost.extra);
       this.record(request, 'completed', summarize(request.method, data));
     } catch (error) {
-      if (error instanceof FakeError) response = this.errorResponse(request.requestId, error.code, error.message, error.extra);
+      if (error instanceof HubRefusal) response = this.errorResponse(request.requestId, error.code, error.message, error.extra);
+      else if (error instanceof FakeError) response = this.errorResponse(request.requestId, error.code, error.message, error.extra);
       else response = this.errorResponse(request.requestId, 'internal_error', error instanceof Error ? error.message : String(error));
       this.record(request, 'failed', { error: response.ok ? undefined : response.error });
     }
@@ -426,6 +476,11 @@ export class FakeRuntime {
         if (!this.options.acceptAnyApiVersion && !offered.some((v) => this.identity.apiVersions.includes(v))) {
           throw new FakeError('version_mismatch', `no API version in common: client ${JSON.stringify(offered)}, runtime ${JSON.stringify(this.identity.apiVersions)}`);
         }
+        if (this.a4) {
+          this.hub.authenticate(params.credential as { clientId: string; token: string } | undefined, conn.who);
+          conn.handshaken = true;
+          return { ...this.identity, principal: { clientId: conn.who.clientId, role: conn.who.role, connectionId: conn.id, codeIdentityLevel: this.hub.codeIdentityLevel } };
+        }
         conn.handshaken = true;
         const principal = this.options.principal === undefined ? undefined : this.options.principal;
         return { ...this.identity, ...(principal ? { principal: { ...principal, connectionId: conn.id } } : {}) };
@@ -440,18 +495,18 @@ export class FakeRuntime {
       case 'runtime.capabilities':
         return {
           apiVersion: RUNTIME_API_VERSION,
-          interface: { methods: [...METHODS.values()].map((m) => ({ method: m.method, mutation: m.mutation, stage: m.stage })) },
+          interface: { methods: [...FAKE_METHODS.values()].map((m) => ({ method: m.method, mutation: m.mutation, stage: m.stage })) },
           backend: { platform: this.identity.platform, permissions: { screenRecording: 'granted', accessibility: 'granted' }, features: this.options.features ?? [] },
         };
       case 'desktop.list':
-        return { desktops: [...this.desktops.values()].map((d) => this.desktopView(d)) };
+        return { desktops: [...this.desktops.values()].filter((d) => !this.a4 || this.hub.desktopAllowed(conn.who, d.desktopId)).map((d) => this.desktopView(d)) };
       case 'desktop.show':
         return this.desktopView(this.desktop(params.desktopId as Id));
       case 'desktop.create': {
         const desktop: DesktopState = {
           desktopId: this.id('desk'), name: (params.name as string) ?? 'desktop', state: 'ready', createdAt: now(),
           screen: { displayId: this.desktops.size + 1, frame: { x: 0, y: 0, width: (params.width as number) ?? 1280, height: (params.height as number) ?? 900 }, hiDPI: true },
-          binding: null, generation: 0,
+          binding: null, generation: 0, createdBy: this.a4 ? conn.who.clientId : 'local:501',
         };
         this.desktops.set(desktop.desktopId, desktop);
         return this.desktopView(desktop);
@@ -465,6 +520,7 @@ export class FakeRuntime {
         return { desktopId: desktop.desktopId, destroyed: true, quitApps: [] };
       }
       case 'app.list':
+        if (this.a4 && !this.hub.appAllowed(conn.who, this.windows[0].bundleId)) return { apps: [] };
         return { apps: [{ process: this.windows[0].process, bundleId: this.windows[0].bundleId, name: this.windows[0].appName, active: false, hidden: false }] };
       case 'app.launch': {
         const desktop = this.desktop(params.desktopId as Id);
@@ -480,7 +536,8 @@ export class FakeRuntime {
         return {
           windows: this.windows
             .filter((w) => (params.pid === undefined || w.process.pid === params.pid) && (params.bundleId === undefined || w.bundleId === params.bundleId))
-            .filter((w) => params.includeOffscreen === true || w.onScreen),
+            .filter((w) => params.includeOffscreen === true || w.onScreen)
+            .filter((w) => !this.a4 || this.hub.appAllowed(conn.who, w.bundleId)),
         };
       }
       case 'window.bind': {
@@ -545,7 +602,7 @@ export class FakeRuntime {
         }
         const run: RunState = {
           runId: this.id('run'), kind: 'act', origin: 'agent_hub', ownership: 'external_client', lifetime: 'connection_scoped',
-          clientId: this.options.principal?.clientId ?? 'local:501', connectionId: conn.id, sessionId: session.sessionId, desktopId: session.desktopId,
+          clientId: this.a4 ? conn.who.clientId : this.options.principal?.clientId ?? 'local:501', connectionId: conn.id, sessionId: session.sessionId, desktopId: session.desktopId,
           phase: 'running', outcome: null, quiescence: 'not_confirmed', closingReason: null, revision: 1, createdAt: now(), receipts: [], unknownActions: 0,
           attachToken: randomBytes(32).toString('hex'), seq: 0, events: [],
         };
@@ -591,6 +648,7 @@ export class FakeRuntime {
           && (params.phase === undefined || r.phase === params.phase)
           && (params.origin === undefined || r.origin === params.origin)
           && (params.clientId === undefined || r.clientId === params.clientId)
+          && (!this.a4 || r.clientId === conn.who.clientId)
           && (params.active === undefined || (r.phase !== 'ended') === params.active));
         return { runs: runs.map((r) => this.runView(r)), next: null };
       }
@@ -640,6 +698,12 @@ export class FakeRuntime {
       case 'events.unsubscribe':
         conn.subscription = null;
         return { subscribed: false };
+      case 'hub.pairing.start': {
+        const pairing = this.hub.startPairing(params as { agentName: string; publisher?: string; requested: never }, conn.who);
+        return { pairingId: pairing.pairingId, shortCode: pairing.shortCode, state: pairing.state, expiresAt: pairing.expiresAt };
+      }
+      case 'hub.pairing.status':
+        return this.hub.pairingStatus(params.pairingId as Id, conn.who);
       default:
         throw new FakeError('capability_missing', `${method} is not implemented by the fake`, { phase: 'request' });
     }
@@ -686,6 +750,21 @@ export class FakeRuntime {
   }
 
   // ---- state helpers -----------------------------------------------------
+
+  /** The owner withdrew a client's access: its connections are marked cut and shut, its Runs stop. */
+  private cut(clientId: string, reason: string): void {
+    for (const conn of this.conns.values()) {
+      if (conn.who.clientId !== clientId) continue;
+      conn.who.cutReason = reason;
+      for (const runId of conn.runIds) {
+        const run = this.runs.get(runId);
+        if (run && run.phase !== 'ended') this.endRun(run, 'cancelled', reason);
+      }
+      conn.alive = false;
+      conn.socket.destroy();
+    }
+    for (const run of this.runs.values()) if (run.clientId === clientId && run.phase !== 'ended') this.endRun(run, 'cancelled', reason);
+  }
 
   private id(prefix: string): Id {
     this.counter += 1;

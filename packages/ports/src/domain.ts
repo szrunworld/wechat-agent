@@ -55,7 +55,7 @@ export type DomainOutcome =
   | 'ambiguous' | 'waiting_user' | 'blocked';
 
 export type DomainReasonCode =
-  | 'capability_missing' | 'pairing_missing' | 'policy_disabled' | 'write_gate_closed'
+  | 'capability_missing' | 'pairing_missing' | 'grant_missing' | 'policy_disabled' | 'write_gate_closed'
   | 'content_mismatch' | 'target_ambiguous' | 'identity_unproven' | 'account_changed'
   | 'approval_invalid' | 'approval_expired' | 'user_draft_present' | 'unexpected_dialog'
   | 'layout_unreadable' | 'coverage_partial' | 'not_found' | 'already_friend' | 'request_expired'

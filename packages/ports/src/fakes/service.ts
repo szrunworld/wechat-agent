@@ -37,6 +37,10 @@ export class FakeApplicationService implements ApplicationService {
         for (const listener of this.listeners) listener(this.current);
         return { inputGate: gate } as IpcMethods[M]['result'];
       }
+      case 'pairing.start':
+        // The person still has to approve in AgentDesktop: the fake moves to the waiting sample.
+        this.show('pairing_waiting');
+        return this.current.connection.pairing as IpcMethods[M]['result'];
       case 'connection.check':
         return { state: this.current.connection.state, apiVersion: this.current.connection.apiVersion, methods: [], missingCapabilities: this.current.connection.missingCapabilities } as IpcMethods[M]['result'];
       default:

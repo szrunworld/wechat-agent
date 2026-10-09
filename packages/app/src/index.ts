@@ -4,7 +4,11 @@ import { WeChatAgentApplication, type Application, type ApplicationDeps, type Ap
 export type { Application, ApplicationDeps, ApplicationInternals };
 export type { AppConfig } from './config.ts';
 export { DEFAULT_CONFIG, resolveConfig } from './config.ts';
-export { RuntimeConnector, SetupSteps, CORE_METHODS, WECHAT_BUNDLE_ID, isConnectionError } from './connector.ts';
+export {
+  RuntimeConnector, SetupSteps, CORE_METHODS, WECHAT_BUNDLE_ID, PAIRING_COOLDOWN_MS, isConnectionError, isAccessLost, isPlatformLost, describeRefusal,
+  type PairingConfig,
+} from './connector.ts';
+export { MemoryCredentialStore, FileCredentialStore } from './credentials.ts';
 export { Dispatcher, type FinishedEvent } from './dispatcher.ts';
 export { computeFeatures, featureKeyFor, reasonCodeForFeature, OUTBOUND_ACTIONS, type FeatureMap } from './features.ts';
 export { InputGate, type PauseReason } from './gate.ts';

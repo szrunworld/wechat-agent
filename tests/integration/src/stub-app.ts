@@ -671,6 +671,7 @@ class StubApp implements Application {
       revision: this.revision,
       connection: {
         state: this.connection, endpoint: 'fake', product: this.connection === 'disconnected' ? undefined : 'AgentDesktop', apiVersion: this.apiVersion, principal: this.principal,
+        pairing: this.principal?.role === 'paired' ? { state: 'paired', clientId: this.principal.clientId } : { state: 'unpaired' },
         missingCapabilities: this.missing(),
         steps: [
           { key: 'discover', state: stepState(this.connection !== 'disconnected') },

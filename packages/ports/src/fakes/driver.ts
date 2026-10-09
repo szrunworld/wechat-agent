@@ -1,7 +1,8 @@
 import { DriverError, RUNTIME_API_VERSION } from '../driver.ts';
 import type {
   Action, ActionReceipt, AgentDesktopDriver, Artifact, Capabilities, CancelReceipt, Desktop, DriverState, EventFrame, EventStream,
-  HandshakeResult, Observation, RequestRecord, Run, RuntimeError, Session, WaitCondition, WaitResult, Window,
+  Credential, HandshakeResult, Observation, PairingStartParams, PairingStarted, PairingStatus, Principal, RequestRecord, Run, RuntimeError, Session,
+  WaitCondition, WaitResult, Window,
 } from '../driver.ts';
 import type { Id } from '../domain.ts';
 
@@ -21,7 +22,14 @@ export interface FakeDriverOptions {
   /** Receipt fields to override for every act. */
   receipt?: Partial<ActionReceipt>;
   faults?: FaultSpec[];
-  principalRole?: 'owner' | 'paired';
+  /**
+   * The role the handshake reports. Unset: A4 as on the real Runtime — `paired` when connect() shows a
+   * credential, else `unpaired`. `owner` only exists for the in-process host; tests use it to prove the
+   * app does not treat it as paired.
+   */
+  principalRole?: Principal['role'];
+  /** How hub.pairing.status answers after startPairing (default `requested`, i.e. the person has not answered yet). */
+  pairingAnswer?: 'requested' | 'approved' | 'denied' | 'expired';
   methods?: string[];
   artifacts?: Record<Id, Uint8Array>;
   /** How cancelRun answers: confirmed (default) ends the run at once; pending leaves it stopping until confirmQuiescence(). */
@@ -70,13 +78,36 @@ export class FakeDriver implements AgentDesktopDriver {
     }
   }
 
-  async connect(): Promise<HandshakeResult> {
-    this.record('connect');
+  /** The credential shown in the last connect(), for assertions. */
+  lastCredential: Credential | null = null;
+
+  async connect(options?: { credential?: Credential | null }): Promise<HandshakeResult> {
+    this.record('connect', options?.credential ? { credential: '[redacted]' } : {});
+    this.lastCredential = options?.credential ?? null;
     this.state = 'connected';
+    const role: Principal['role'] = this.options.principalRole ?? (this.lastCredential ? 'paired' : 'unpaired');
+    const clientId = role === 'paired' ? (this.lastCredential?.clientId ?? 'app:wechat-agent') : role === 'owner' ? 'local:501' : 'unpaired:conn_00000000000000fa';
     return {
       identity: { product: 'AgentDesktop', productVersion: '0.0.0-fake', apiVersion: RUNTIME_API_VERSION, apiVersions: [RUNTIME_API_VERSION], instanceId: 'inst_fake', pid: 1, startedAt: now(), endpoint: 'fake', platform: {}, build: { source: 'fake' } },
-      principal: { clientId: this.options.principalRole === 'paired' ? 'app:wechat-agent' : 'local:501', role: this.options.principalRole ?? 'owner', connectionId: 'conn_fake' },
+      principal: { clientId, role, connectionId: 'conn_fake' },
       raw: {},
+    };
+  }
+
+  async startPairing(params: PairingStartParams): Promise<PairingStarted> {
+    this.record('startPairing', params);
+    return { pairingId: 'pair_fake', shortCode: '123456', state: 'requested', expiresAt: new Date(Date.now() + 120_000).toISOString() };
+  }
+
+  async pairingStatus(pairingId: string): Promise<PairingStatus> {
+    this.record('pairingStatus', pairingId);
+    const state = this.options.pairingAnswer ?? 'requested';
+    const base: PairingStatus = { pairingId, state, expiresAt: new Date(Date.now() + 120_000).toISOString() };
+    if (state !== 'approved') return base;
+    const clientId = 'app:wechat-agent';
+    return {
+      ...base, clientId, credential: { clientId, token: 'adt1_fake-token-not-a-secret' },
+      grant: { clientId, capabilities: ['observe', 'act', 'desktop.manage', 'run'], desktops: ['created'], apps: ['com.tencent.xinWeChat'], expiresAt: new Date(Date.now() + 86_400_000).toISOString(), revision: 1, state: 'active' },
     };
   }
 
@@ -87,7 +118,7 @@ export class FakeDriver implements AgentDesktopDriver {
 
   async capabilities(): Promise<Capabilities> {
     this.record('capabilities');
-    const methods = this.options.methods ?? ['runtime.handshake', 'runtime.capabilities', 'desktop.list', 'window.list', 'window.bind', 'window.unbind', 'session.open', 'session.close', 'run.start', 'run.finish', 'run.show', 'run.wait', 'run.cancel', 'observe', 'act', 'wait', 'request.show', 'artifact.show', 'artifact.read', 'events.subscribe'];
+    const methods = this.options.methods ?? ['runtime.handshake', 'runtime.capabilities', 'hub.pairing.start', 'hub.pairing.status', 'desktop.list', 'window.list', 'window.bind', 'window.unbind', 'session.open', 'session.close', 'run.start', 'run.finish', 'run.show', 'run.wait', 'run.cancel', 'observe', 'act', 'wait', 'request.show', 'artifact.show', 'artifact.read', 'events.subscribe'];
     return {
       apiVersion: RUNTIME_API_VERSION,
       interface: { methods: methods.map((m) => ({ method: m, mutation: m === 'act' || m.startsWith('run.') || m.startsWith('window.') || m.startsWith('session.'), stage: 'P0' as const })) },

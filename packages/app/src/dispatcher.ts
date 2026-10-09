@@ -9,7 +9,7 @@ import type {
 } from '@wechat-agent/ports';
 import type { AppConfig } from './config.ts';
 import type { RuntimeConnector } from './connector.ts';
-import { isConnectionError } from './connector.ts';
+import { describeRefusal, isPlatformLost } from './connector.ts';
 import type { FeatureMap } from './features.ts';
 import type { InputGate } from './gate.ts';
 import { KEY_FACT_KINDS, taskFinalDraft, type OutboxWriter } from './outbox.ts';
@@ -330,7 +330,11 @@ export class Dispatcher {
   private resultFromError(rt: TaskRuntime, error: unknown): DomainResult {
     const empty = { facts: [], evidenceIds: [] };
     if (error instanceof WriteGateClosedError) return { outcome: 'blocked', reasonCode: 'write_gate_closed', reason: error.message, ...empty };
-    if (isConnectionError(error) || rt.disconnected) {
+    // Refused by the grant (A4): a clear permission error, not a failure of the task's content.
+    if (error instanceof DriverError && error.error.code === 'grant_missing' && !isPlatformLost(error)) {
+      return { outcome: 'blocked', reasonCode: 'grant_missing', reason: describeRefusal(error), ...empty };
+    }
+    if (isPlatformLost(error) || rt.disconnected) {
       return this.dispatchedUnverified(rt)
         ? { outcome: 'needs_reconciliation', reasonCode: 'platform_unknown', reason: errorMessage(error), ...empty }
         : { outcome: 'blocked', reasonCode: 'disconnected', reason: errorMessage(error), ...empty };
@@ -439,7 +443,7 @@ export class Dispatcher {
   }
 
   private observeDriverError(rt: TaskRuntime, error: unknown): boolean {
-    if (!isConnectionError(error)) return false;
+    if (!isPlatformLost(error)) return false;
     rt.disconnected = true;
     rt.abort.abort();
     this.deps.connector.observeError(error);

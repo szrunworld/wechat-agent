@@ -73,7 +73,8 @@ test('every implemented method answers with data that validates against its resu
   await run_('run.finish', { runId, exitCode: 0 });
   await run_('run.cancel', { runId });
   await run_('runtime.stopAll', { scope: 'all_platform_runs' });
-  await run_('runtime.enableInput');
+  const pairing = await run_('hub.pairing.start', { agentName: 'WeChat Agent', requested: { capabilities: ['observe'], apps: ['com.tencent.xinWeChat'] } });
+  await run_('hub.pairing.status', { pairingId: pairing.pairingId as string });
   await run_('session.close', { sessionId });
   // A Run stream for an ended Run closes the connection after the last event (per methods.json), so use the global stream here.
   await run_('events.subscribe', { after: 0 });
@@ -102,7 +103,7 @@ test('transport rules: frame_too_large with requestId null, schema_invalid for b
   const { call } = await raw(t, fake.endpoint);
   const bad = await call('observe', { screenshot: 'yes' } as unknown as Record<string, unknown>, { sessionId: 'ses_x' });
   assert.ok(!bad.ok && bad.error.code === 'schema_invalid' && bad.error.phase === 'request');
-  const unknown = await call('hub.pairing.start');
+  const unknown = await call('inbox.list');
   assert.ok(!unknown.ok && unknown.error.code === 'capability_missing');
   const socket = net.createConnection({ path: fake.endpoint });
   socket.on('error', () => { /* EPIPE once the Runtime hangs up on us is expected */ });

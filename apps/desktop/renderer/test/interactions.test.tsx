@@ -121,6 +121,25 @@ describe('W01 连接与账号确认', () => {
     expect(screen.getByText(/停在"发现 AgentDesktop"/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: '这就是我的账号' })).toBeNull();
   });
+  it('unpaired: offers to pair, then shows the code to compare in AgentDesktop', async () => {
+    const { fake } = await mount('unpaired', 'W01');
+    expect(screen.getByText(/AgentDesktop 对未配对的程序只回答配对请求/)).toBeTruthy();
+    fireEvent.click(button('申请配对'));
+    await waitFor(() => expect(fake.calls.some((c) => c.method === 'pairing.start')).toBe(true));
+    await waitFor(() => expect(screen.getByText('493027')).toBeTruthy());
+    expect(screen.getByText(/用 Touch ID 批准。本应用不会替你批准/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /申请配对/ })).toBeNull();
+  });
+  it('revoked: says so and offers to pair again', async () => {
+    await mount('revoked', 'W01');
+    expect(screen.getAllByText(/已撤销/).length).toBeGreaterThan(0);
+    expect(button('重新申请配对')).toBeTruthy();
+  });
+  it('no_access: asks the person to renew in AgentDesktop and offers no pairing', async () => {
+    await mount('no_access', 'W01');
+    expect(screen.getAllByText(/续期/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /申请配对/ })).toBeNull();
+  });
   it('confirms the account with its evidence and revision', async () => {
     const { fake } = await mount('account_unconfirmed', 'W01');
     fireEvent.click(button('这就是我的账号'));

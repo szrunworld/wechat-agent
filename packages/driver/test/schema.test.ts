@@ -24,7 +24,12 @@ test('envelope: apiVersion const, requestId pattern, method pattern, no extra ke
   assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: '-bad', method: 'observe', params: {} }).some((p) => p.includes('requestId')));
   assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'Observe', params: {} }).some((p) => p.includes('method')));
   assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'observe', params: {}, extra: 1 }).some((p) => p.includes('extra')));
-  assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'hub.pairing.start', params: {} }).some((p) => p.includes('not an implemented method')));
+  assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'inbox.list', params: {} }).some((p) => p.includes('not an implemented method')));
+  // A4: of hub.* this client only asks to pair; the owner's calls (approve, grants, clients) and enableInput are refused locally.
+  for (const method of ['hub.pairing.approve', 'hub.pairing.deny', 'hub.grants.set', 'hub.grants.revoke', 'hub.clients.list', 'hub.clients.revoke', 'hub.connections.list', 'runtime.enableInput']) {
+    assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method, params: {} }).some((p) => p.includes('does not call')), method);
+  }
+  assert.deepEqual(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'hub.pairing.status', params: { pairingId: 'pair_1' } }), []);
   // Platform service families (model configuration, the transitional gui.runs) are implemented but not this client's.
   assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'ai.profiles.list', params: {} }).some((p) => p.includes('does not call')));
   assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'gui.runs.start', params: {} }).some((p) => p.includes('does not call')));

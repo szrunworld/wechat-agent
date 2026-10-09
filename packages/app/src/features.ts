@@ -39,6 +39,10 @@ export function computeFeatures(input: FeatureInput): FeatureMap {
   const all = (state: FeatureState): FeatureMap => ({ read_list: state, accept_request: state, add_friend: state, reply_draft: state, send_message: state, handback: state });
   if (input.connection === 'disconnected' || input.connection === 'connecting') return all(off('platform_offline', 'AgentDesktop 不可达'));
   if (input.connection === 'incompatible') return all(off('capability_missing', '协议不兼容：需要 agentdesktop.runtime/1'));
+  // A4: without a paired identity and a live grant the Runtime answers nothing, reading included.
+  if (input.connection === 'unpaired' || input.connection === 'pairing') return all(off('pairing_missing', '未配对：在 AgentDesktop 中完成配对前，读取和外发都不可用'));
+  if (input.connection === 'revoked') return all(off('pairing_missing', '授权已被撤销：需要重新配对'));
+  if (input.connection === 'no_access') return all(off('grant_missing', '授权已过期或被收回：请在 AgentDesktop 中续期或重新授权'));
 
   const result = {} as FeatureMap;
   for (const [key, type] of Object.entries(FEATURE_TASK) as [Exclude<FeatureKey, 'handback'>, TaskType][]) {
@@ -48,7 +52,7 @@ export function computeFeatures(input: FeatureInput): FeatureMap {
     if (missing.length) { result[key] = off('capability_missing', `平台缺少方法：${missing.join(', ')}`); continue; }
     const outbound = handler.requires.actions.some((a) => OUTBOUND_ACTIONS.includes(a));
     if (outbound) {
-      if (!input.paired) { result[key] = off('pairing_missing', '未配对：CR01 落地前外发保持 blocked'); continue; }
+      if (!input.paired) { result[key] = off('pairing_missing', '未配对：外发需要配对身份'); continue; }
       if (!input.accountConfirmed) { result[key] = off('account_unconfirmed', '请先确认当前微信账号'); continue; }
       const notAllowed = handler.requires.actions.filter((a) => !input.policy.allowedActions.includes(a));
       if (notAllowed.length) { result[key] = off('policy_disabled', `策略未允许动作：${notAllowed.join(', ')}`); continue; }
@@ -68,6 +72,7 @@ export function reasonCodeForFeature(state: FeatureState): DomainReasonCode {
   if (state.enabled) return 'policy_disabled';
   switch (state.reason) {
     case 'pairing_missing': return 'pairing_missing';
+    case 'grant_missing': return 'grant_missing';
     case 'capability_missing': return 'capability_missing';
     case 'policy_disabled': return 'policy_disabled';
     case 'platform_offline': return 'disconnected';

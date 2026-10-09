@@ -2,6 +2,7 @@
 // See docs/lanes/lane-a.md and packages/driver/README.md.
 export { createDriver, resolveEndpoint } from './client.ts';
 export { FakeRuntime, type FakeRuntimeOptions, type FakeFault, type LoggedRequest } from './fake-runtime.ts';
+export { FakeHub, HubRefusal, type FakeA4Options, type FakePairing, type HubConnection } from './fake-hub.ts';
 export { encodeFrame, LineDecoder } from './framing.ts';
 export { RpcConnection } from './connection.ts';
 export {

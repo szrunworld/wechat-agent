@@ -51,9 +51,12 @@ export const errorsContract: ErrorsContract = loadJson('errors.json');
  * implemented methods minus the platform's own service families. `ai.*`
  * (model configuration, params in service.schema.json) belongs to the
  * AgentDesktop UI, and `gui.runs.*` is transitional until unit.run; the
- * WeChat Agent calls neither, so they are refused locally.
+ * WeChat Agent calls neither, so they are refused locally. Of `hub.*` it
+ * asks only to pair (hub.pairing.start/status): approving, granting,
+ * revoking and listing clients are the owner's, and this app never asks
+ * for owner calls (A4: no owner identity, no back door).
  */
-const NOT_FOR_THIS_CLIENT = /^(ai|gui\.runs)\./;
+const NOT_FOR_THIS_CLIENT = /^(ai|gui\.runs)\.|^hub\.(?!pairing\.(start|status)$)|^runtime\.enableInput$/;
 export const METHODS: ReadonlyMap<string, MethodSpec> = new Map(
   methodsContract.methods.filter((m) => !NOT_FOR_THIS_CLIENT.test(m.method)).map((m) => [m.method, m]),
 );
