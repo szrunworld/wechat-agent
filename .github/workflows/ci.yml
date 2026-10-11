@@ -13,6 +13,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Acceptance process identity safety
+        run: |
+          sh scripts/lib/process-identity-selftest.sh
+          python3 scripts/lib/process-identity-kernel-test.py
       - run: npm ci
       - run: scripts/check-bans.sh
       - run: npm run build:ocr
