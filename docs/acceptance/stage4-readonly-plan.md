@@ -85,7 +85,7 @@ App 在连接后自动 `desktop.list → window.list → window.bind`（过滤 `
 
 | 要确认 | 来源 |
 | --- | --- |
-| 只发生导航点击 | 账本 `listAttempts(taskId)` 的 `stepId` 全是 `navigate:*`；平台 `run.events` 的 `action.receipt` 数 = 导航次数；`kind=click` |
+| 只发生导航点击 | 账本 `listAttempts(taskId)` 的 `stepId` 全是 `navigate:*`；平台 `run.events` 的 `action.accepted` 数 = 导航次数；`kind=click` |
 | Run 生命周期 | `run.start` params 为 `{}`（无 lifetime/ownership/origin）；结束时 `run.finish`，`closingReason=finished`，`outcome=success` |
 | 证据链 | `list_read.evidenceIds[0]` → `Evidence.artifactId/sha256` = 平台 `artifact.show` 的 sha256 = 本地截图 `shasum -a 256` |
 
@@ -127,7 +127,7 @@ coverage / actualResult / defectId / operator / reviewer
 | 证据 | 怎么取 | 写到 |
 | --- | --- | --- |
 | 截图 artifact | `observe` 的 `image.artifactId` + `artifact.show.sha256`；本地 `shasum -a 256` 必须相等 | `beforeEvidenceHash / afterEvidenceHash`（本地前后截图），`actualResult` 里写 `artifactId=… sha256=…` |
-| Runtime 事件 | `run.events {runId}` 原样 JSON（或订阅帧）存本地证据目录 `stage4/run-events-<runId>.json` | `platformRunId`；`receiptId` 取 `action.receipt` 事件 |
+| Runtime 事件 | `run.events {runId}` 原样 JSON（或订阅帧）存本地证据目录 `stage4/run-events-<runId>.json` | `platformRunId`；`receiptId` 取 `action.completed|failed|unknown` 事件的 `receipt` |
 | Ledger 记录 | `task.show`（`platform.*`、`facts[]`）、`diagnostics.export`（脱敏）；attempts 用账本导出 | `operationId → … → receiptId`、`businessFactId`（`list_read` 的 factId）、`coverage` |
 | 结论 | 明确 `Pass / Fail / Blocked` 与一句话原因；没有执行过的步骤不写 | `result`、`actualResult`、`defectId` |
 

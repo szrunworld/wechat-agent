@@ -47,18 +47,30 @@ export const methodsContract: MethodsContract = loadJson('methods.json');
 export const errorsContract: ErrorsContract = loadJson('errors.json');
 
 /**
- * The runtime/1 GUI surface this client may call, by name: the snapshot's
- * implemented methods minus the platform's own service families. `ai.*`
- * (model configuration, params in service.schema.json) belongs to the
- * AgentDesktop UI, and `gui.runs.*` is transitional until unit.run; the
- * WeChat Agent calls neither, so they are refused locally. Of `hub.*` it
- * asks only to pair (hub.pairing.start/status): approving, granting,
- * revoking and listing clients are the owner's, and this app never asks
- * for owner calls (A4: no owner identity, no back door).
+ * The runtime/1 methods this client calls, by name. It is a list, not "every
+ * implemented method minus some families": a method the platform adds later
+ * (agentdesktop 7cbbdec added desktop.takeover/stop/resize, unit.run,
+ * observe.subscribe, request.list, hub.windows.*, hub.displays.* ...) is
+ * refused locally until this app adopts it on purpose. Of `hub.*` it asks
+ * only to pair (hub.pairing.start/status): approving, granting, revoking,
+ * listing clients and attaching displays are the owner's, and this app never
+ * asks for owner calls (A4: no owner identity, no back door). Window grants
+ * (hub.windows.request/list/revoke) come with stage 4, when the app binds a
+ * window on a physical Desktop. `ai.*` belongs to the AgentDesktop UI.
  */
-const NOT_FOR_THIS_CLIENT = /^(ai|gui\.runs)\.|^hub\.(?!pairing\.(start|status)$)|^runtime\.enableInput$/;
+export const CALLED_METHODS: readonly string[] = [
+  'runtime.handshake', 'runtime.status', 'runtime.capabilities', 'runtime.stopAll',
+  'desktop.list', 'desktop.show', 'desktop.create', 'desktop.destroy',
+  'app.list', 'app.launch', 'window.list', 'window.bind', 'window.unbind',
+  'session.open', 'session.show', 'session.close',
+  'observe', 'act', 'wait', 'request.show',
+  'run.start', 'run.attach', 'run.finish', 'run.show', 'run.events', 'run.wait', 'run.cancel', 'run.list',
+  'artifact.show', 'artifact.read', 'events.subscribe', 'events.unsubscribe',
+  'hub.pairing.start', 'hub.pairing.status',
+];
+const CALLED = new Set(CALLED_METHODS);
 export const METHODS: ReadonlyMap<string, MethodSpec> = new Map(
-  methodsContract.methods.filter((m) => !NOT_FOR_THIS_CLIENT.test(m.method)).map((m) => [m.method, m]),
+  methodsContract.methods.filter((m) => CALLED.has(m.method)).map((m) => [m.method, m]),
 );
 /** Every implemented method the snapshot lists, including the ones this client never calls. */
 export const ALL_IMPLEMENTED_METHODS: ReadonlyMap<string, MethodSpec> = new Map(methodsContract.methods.map((m) => [m.method, m]));
@@ -255,7 +267,7 @@ export function requestProblems(request: unknown): string[] {
   const spec = METHODS.get(method);
   if (!spec) {
     return [ALL_IMPLEMENTED_METHODS.has(method)
-      ? `$.method: ${method} is a platform service method this client does not call`
+      ? `$.method: ${method} is a runtime/1 method this client does not call`
       : `$.method: ${method} is not an implemented method of the snapshot`];
   }
   return validator.errors(spec.params, params).map((p) => p.replace(/^\$/, '$.params'));

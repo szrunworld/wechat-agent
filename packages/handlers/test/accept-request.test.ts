@@ -128,6 +128,26 @@ test('a dropped connection after dispatch → attempt unknown → needs_reconcil
   assert.match(result.reason ?? '', /not re-sent/);
 });
 
+test('a grant refusal on an act the Runtime already did (writeOutcome completed) is reconciled, never re-sent or treated as unpaired', async () => {
+  // runtime/1 errors.json (agentdesktop 7cbbdec): client_revoked / grant_missing / grant_expired on a
+  // write the service already did carry notSent:false and details.writeOutcome "completed".
+  for (const [code, recovery] of [['client_revoked', 'check_outcome_do_not_resubmit'], ['grant_missing', 'look_up_same_request_id'], ['grant_expired', 'look_up_same_request_id']] as const) {
+    const h = await harness({
+      task, facts: [list('pending'), detail(), detail(), list('added')],
+      driver: { faults: [{ method: 'act', onCall: 2, error: { code, phase: 'handler', retryable: false, notSent: false, details: { writeOutcome: 'completed', recovery } } }] },
+    });
+    const result = await h.run();
+    assert.equal(result.outcome, 'needs_reconciliation', code);
+    assert.notEqual(result.reasonCode, 'pairing_missing', `${code}: the click happened, so this is not a pairing problem`);
+    const sent = acts(h.driver);
+    assert.equal(sent.length, 2, `${code}: no re-dispatch`);
+    const accept = attemptsFor(h.ledger, 'accept');
+    assert.equal(accept.length, 1, code);
+    assert.equal(accept[0].state, 'unknown', code);
+    assert.equal(accept[0].requestId, sent[1].requestId, code);
+  }
+});
+
 test('notSent=true is re-plannable: blocked, no reconciliation, attempt closed with a not_sent reason', async () => {
   const h = await harness({
     task, facts: [list('pending'), detail(), detail()],

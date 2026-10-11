@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { RUNTIME_API_VERSION } from '@wechat-agent/ports';
-import { METHODS, canonicalJson, methodsContract, requestProblems, validator } from '../src/index.ts';
+import { ALL_IMPLEMENTED_METHODS, CALLED_METHODS, METHODS, canonicalJson, methodsContract, requestProblems, validator } from '../src/index.ts';
 import { PARAMS_EXAMPLES, exampleRequest } from './examples.ts';
 
 test('every implemented method of the snapshot has a request example that passes local schema validation', () => {
@@ -30,9 +30,18 @@ test('envelope: apiVersion const, requestId pattern, method pattern, no extra ke
     assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method, params: {} }).some((p) => p.includes('does not call')), method);
   }
   assert.deepEqual(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'hub.pairing.status', params: { pairingId: 'pair_1' } }), []);
-  // Platform service families (model configuration, the transitional gui.runs) are implemented but not this client's.
-  assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'ai.profiles.list', params: {} }).some((p) => p.includes('does not call')));
-  assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'gui.runs.start', params: {} }).some((p) => p.includes('does not call')));
+  // Methods the platform implements but this app has not adopted are refused locally, by name (CALLED_METHODS).
+  for (const method of ['ai.profiles.list', 'unit.run', 'desktop.takeover', 'desktop.stop', 'observe.subscribe', 'request.list', 'hub.windows.request', 'hub.windows.list', 'hub.displays.attach', 'hub.displays.list']) {
+    assert.ok(ALL_IMPLEMENTED_METHODS.has(method), `${method} is in the snapshot`);
+    assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method, params: {} }).some((p) => p.includes('does not call')), method);
+  }
+  // gui.runs.* was withdrawn from runtime/1 (agentdesktop 7cbbdec): no longer a method at all.
+  assert.ok(requestProblems({ apiVersion: RUNTIME_API_VERSION, requestId: 'rq_1', method: 'gui.runs.start', params: {} }).some((p) => p.includes('not an implemented method')));
+});
+
+test('every method this client calls is implemented in the snapshot', () => {
+  for (const method of CALLED_METHODS) assert.ok(METHODS.has(method), `${method} is not an implemented method of the snapshot`);
+  assert.equal(METHODS.size, CALLED_METHODS.length);
 });
 
 test('params: additionalProperties, pattern, oneOf, not, if/then, dependentRequired, uniqueItems, enum null', () => {
@@ -55,7 +64,10 @@ test('params: additionalProperties, pattern, oneOf, not, if/then, dependentRequi
   assert.ok(!validator.valid('Action', { kind: 'key' }));
   assert.ok(!validator.valid('Action', { kind: 'scroll' }));
   assert.ok(validator.valid('Action', { kind: 'scroll', direction: 'down', amount: 3 }));
-  assert.ok(!validator.valid('Action', { kind: 'hover', target: { elementRef: 'el_1' } }));
+  // hover / press / drag are runtime/1 kinds since agentdesktop 7cbbdec; on macOS the Runtime answers
+  // hover and drag with unsupported_backend (notSent). This app never plans them; an unknown kind is still invalid.
+  assert.ok(validator.valid('Action', { kind: 'hover', target: { elementRef: 'el_1' } }));
+  assert.ok(!validator.valid('Action', { kind: 'teleport', target: { elementRef: 'el_1' } }));
   // ActionTarget oneOf: not both
   assert.ok(!validator.valid('ActionTarget', { elementRef: 'e', imagePoint: { x: 1, y: 1 } }));
   // dependentRequired

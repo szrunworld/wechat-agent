@@ -608,7 +608,7 @@ export class FakeRuntime {
         };
         this.runs.set(run.runId, run);
         conn.runIds.add(run.runId);
-        this.emit(run, 'run.started', { sessionId: run.sessionId });
+        this.emit(run, 'run.started', { kind: run.kind, origin: run.origin, ownership: run.ownership, lifetime: run.lifetime, desktopId: run.desktopId, sessionId: run.sessionId });
         return { run: this.runView(run), attachToken: run.attachToken };
       }
       case 'run.attach': {
@@ -744,7 +744,14 @@ export class FakeRuntime {
     run.receipts.push(receipt.receiptId);
     run.revision += 1;
     if (receipt.delivery === 'unknown' || receipt.execution === 'unknown') run.unknownActions += 1;
-    this.emit(run, 'action.receipt', { receiptId: receipt.receiptId, requestId, delivery: receipt.delivery, execution: receipt.execution, kind: params.action.kind });
+    // The event catalog of runtime/1 (PlatformRunEvent), as the Runtime writes it for one act.
+    this.emit(run, 'action.accepted', { requestId, kind: String(params.action.kind) });
+    if (receipt.delivery === 'not_dispatched') {
+      this.emit(run, 'action.refused', { requestId, reason: receipt.reason ?? { code: 'not_dispatched', message: 'the action was not dispatched' } });
+    } else {
+      this.emit(run, 'action.dispatched', { requestId });
+      this.emit(run, `action.${receipt.execution}`, { receipt });
+    }
     void conn;
     return receipt;
   }
@@ -847,7 +854,7 @@ export class FakeRuntime {
       if (conn.subscription.runId !== undefined) {
         if (conn.subscription.runId !== run.runId) continue;
         this.write(conn, { apiVersion: RUNTIME_API_VERSION, event, cursor: event.sequence });
-        if (run.phase === 'ended') conn.socket.end();
+        if (event.type === 'run.ended') conn.socket.end();
       } else {
         this.write(conn, { apiVersion: RUNTIME_API_VERSION, event, cursor: this.globalCursor });
       }
@@ -874,7 +881,7 @@ export class FakeRuntime {
     run.quiescence = 'pending';
     run.closingReason = closingReason;
     run.revision += 1;
-    this.emit(run, 'run.stopping', { closingReason });
+    this.emit(run, 'stop.accepted', { reason: closingReason, inFlight: false, revision: run.revision });
   }
 
   private endRun(run: RunState, outcome: 'success' | 'failed' | 'cancelled' | 'unknown', closingReason: string): void {
@@ -884,7 +891,8 @@ export class FakeRuntime {
     run.closingReason = closingReason;
     run.revision += 1;
     run.endedAt = now();
-    this.emit(run, 'run.ended', { outcome, closingReason });
+    this.emit(run, 'run.quiescent', { revision: run.revision });
+    this.emit(run, 'run.ended', { phase: 'ended', outcome, reason: closingReason });
   }
 
   private desktopView(desktop: DesktopState): Record<string, unknown> {

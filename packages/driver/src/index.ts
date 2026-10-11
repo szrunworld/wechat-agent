@@ -6,7 +6,7 @@ export { FakeHub, HubRefusal, type FakeA4Options, type FakePairing, type HubConn
 export { encodeFrame, LineDecoder } from './framing.ts';
 export { RpcConnection } from './connection.ts';
 export {
-  SchemaValidator, validator, runtimeSchema, methodsContract, errorsContract, METHODS, ALL_IMPLEMENTED_METHODS, ERROR_CODES,
+  SchemaValidator, validator, runtimeSchema, methodsContract, errorsContract, METHODS, CALLED_METHODS, ALL_IMPLEMENTED_METHODS, ERROR_CODES,
   requestProblems, resultProblems, paramsSchemaName, resultSchemaName, canonicalJson,
   type JsonSchema, type MethodSpec, type ErrorSpec,
 } from './schema.ts';

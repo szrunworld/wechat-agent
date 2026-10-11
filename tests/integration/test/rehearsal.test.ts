@@ -93,7 +93,7 @@ test('rehearsal A01–A04: connect (handshake, contract, capabilities, principal
   assert.equal(run.phase, 'ended');
   assert.equal(run.outcome, 'success');
   assert.equal(run.closingReason, 'finished');
-  assert.deepEqual(run.events.map((e) => e.type), ['run.started', 'action.receipt', 'run.ended'], 'run.events: the evidence the plan asks for');
+  assert.deepEqual(run.events.map((e) => e.type), ['run.started', 'action.accepted', 'action.dispatched', 'action.completed', 'run.quiescent', 'run.ended'], 'run.events: the evidence the plan asks for');
 
   // The one click is the navigation to 通讯录, at the centre of the recognised control, in image pixels.
   const [click] = acts(stack);
