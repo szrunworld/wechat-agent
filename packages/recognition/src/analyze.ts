@@ -74,7 +74,11 @@ export function requestSection(texts: TextItem[], profile: WeChatLayoutProfile, 
       if (tail) {
         statusText = tail;
         const head = name.slice(0, name.lastIndexOf(tail.slice(0, 1)));
-        name = head.replace(/[\s•·.…]+$/, '').trim() + (/[.…]{2,}\s*$|…\s*$/.test(head) ? '…' : '');
+        // What sits between the name and the status: spacing, dots, bullets, and
+        // the list's truncation mark when it cut the name (Vision on another Mac
+        // reads that run as "….•"). An ellipsis or two dots in it means cut short.
+        const junk = head.match(/[\s•·.…]+$/)?.[0] ?? '';
+        name = head.slice(0, head.length - junk.length).trim() + (/…|\.{2,}/.test(junk) ? '…' : '');
         statusItem = undefined;
       }
     }
