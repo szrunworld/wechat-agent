@@ -1,8 +1,15 @@
 // Text helpers shared by the analysis and the identity check.
 import type { PixelRect, TextItem } from '@wechat-agent/ports';
 
+/**
+ * Vision reads the list's truncation mark as … (U+2026) on one Mac and as ⋯
+ * (U+22EF) or ‥ (U+2025) on another; they all mean "cut short", so they all
+ * become … before anything looks at the text.
+ */
+export const canonicalEllipsis = (text: string) => text.replace(/[⋯‥]/g, '…');
+
 /** Collapses whitespace and full-width brackets so OCR spacing does not matter. */
-export const norm = (text: string) => text.replace(/\s+/g, '').replace(/[（]/g, '(').replace(/[）]/g, ')');
+export const norm = (text: string) => canonicalEllipsis(text).replace(/\s+/g, '').replace(/[（]/g, '(').replace(/[）]/g, ')');
 
 /** Strips the … / ... a list adds when it cuts a name short. */
 export const untruncate = (text: string) => norm(text).replace(/[.…·]+$/, '');

@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { PixelRect, TextItem } from '@wechat-agent/ports';
+import { canonicalEllipsis } from './text.ts';
 
 export class OcrError extends Error {
   override name = 'OcrError';
@@ -40,7 +41,7 @@ export function createOcrRunner(binary = DEFAULT_OCR_PATH, timeoutMs = 20_000): 
           }
           try {
             const raw = JSON.parse(stdout) as { text: string; x: number; y: number; w: number; h: number; confidence: number }[];
-            done(raw.map((w) => ({ text: w.text, rect: { x: w.x, y: w.y, width: w.w, height: w.h }, confidence: w.confidence })));
+            done(raw.map((w) => ({ text: canonicalEllipsis(w.text), rect: { x: w.x, y: w.y, width: w.w, height: w.h }, confidence: w.confidence })));
           } catch (e) {
             fail(new OcrError(`ocr helper printed no JSON: ${(e as Error).message}`));
           }

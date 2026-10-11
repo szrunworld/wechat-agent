@@ -33,6 +33,16 @@ test('T11 a truncated name is ambiguous even when it is the only match', () => {
   assert.equal(prefix.ambiguous, true, 'a shown name that is only a prefix of the full name is not proof');
 });
 
+test('T11 the truncation mark counts whichever ellipsis glyph Vision returns', () => {
+  for (const mark of ['…', '⋯', '‥']) {
+    const out = identityCandidates([row(`昵称特别长的合成${mark}`)], '昵称特别长的合成用户名');
+    assert.equal(out.ambiguous, true, mark);
+    assert.equal(out.reason, 'truncated_name', mark);
+  }
+  const other = identityCandidates([row('昵称特别长的合成⋯')], '王大为');
+  assert.equal(other.reason, 'not_found', 'a cut name still has to match the name it is cut from');
+});
+
 test('T11 a low-confidence read is ambiguous', () => {
   const out = identityCandidates([row('林小雨', 0.4)], '林小雨');
   assert.equal(out.ambiguous, true);
