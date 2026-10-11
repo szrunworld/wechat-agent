@@ -32,7 +32,8 @@ test('reads 新的朋友 rows, their notes and statuses (legacy 1)', () => {
   assert.deepEqual(section.rows.map((r) => [r.name, r.status, r.note]), [
     ['陈一', 'pending', '我是陈一，BOSS直聘看到的'],
     ['Lin Er', 'added', '我是 Lin Er'],
-    ['York•张三 at dy', 'added', '我：我是"Chinese founder..'],
+    // "dy..•": the list cut the name (the dots), so it reads as truncated; the legacy parse dropped that mark.
+    ['York•张三 at dy…', 'added', '我：我是"Chinese founder..'],
     ['HH', 'expired', '我：我是"Chinese founder..'],
   ]);
   // Row rect centre in pixels: the legacy centre (168 pt) plus the row's offset below the name.

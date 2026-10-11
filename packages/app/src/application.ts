@@ -3,11 +3,13 @@
 // the AppSnapshot and serves the typed IPC.
 import { DriverError, IpcFailure, LedgerConflictError, LedgerUnavailableError, WriteGateClosedError } from '@wechat-agent/ports';
 import type {
+  CredentialStore,
   AccountBinding, AgentDesktopDriver, ApplicationService, AppSnapshot, HandlerRegistry, Id, IpcMethod, IpcMethods, Ledger, Recognizer, TaskView, Timestamp,
 } from '@wechat-agent/ports';
 import path from 'node:path';
 import { resolveConfig, type AppConfig } from './config.ts';
 import { RuntimeConnector } from './connector.ts';
+import { MemoryCredentialStore } from './credentials.ts';
 import { exportDiagnostics } from './diagnostics.ts';
 import { Dispatcher } from './dispatcher.ts';
 import { computeFeatures, type FeatureMap } from './features.ts';
@@ -32,6 +34,11 @@ export interface ApplicationDeps {
   log?: (line: string) => void;
   /** Where outbox events are delivered. Default: a JSONL file under `config.dataDir`. */
   outboxSink?: OutboxSink;
+  /**
+   * Where the pairing credential lives (A4). Default: memory, so the app pairs again on every start.
+   * Tests use memory or a 0600 file; they never write the login keychain.
+   */
+  credentials?: CredentialStore;
 }
 
 export interface ApplicationInternals {
@@ -98,7 +105,7 @@ export class WeChatAgentApplication implements Application {
       onEvent: () => this.scheduleSnapshot(),
       onChange: () => this.scheduleSnapshot(),
       log,
-    });
+    }, { credentials: deps.credentials ?? new MemoryCredentialStore(), pairing: this.config.pairing, now: this.now });
     this.outbox = new OutboxDeliverer({
       ledger: deps.ledger, sink: deps.outboxSink ?? new FileSink(path.join(this.config.dataDir, 'outbox.jsonl'), this.now), now: this.now, scheduler: this.scheduler, log,
       backoff: this.config.outbox,
@@ -291,7 +298,7 @@ export class WeChatAgentApplication implements Application {
       revision: this.revision,
       connection: {
         state: this.connector.state, endpoint: this.config.endpoint, product: identity?.product, apiVersion: identity?.apiVersion,
-        principal: this.connector.principal, missingCapabilities: [...this.connector.missingCapabilities], steps: this.connector.steps.snapshot(),
+        principal: this.connector.principal, pairing: { ...this.connector.pairing }, missingCapabilities: [...this.connector.missingCapabilities], steps: this.connector.steps.snapshot(),
       },
       account: account ?? (this.pendingBindingEvidence
         ? { accountId: '', visibleLabel: '（待确认）', evidenceIds: [this.pendingBindingEvidence], confirmedAt: '', revision: 0, status: 'unconfirmed' }
@@ -365,6 +372,8 @@ export class WeChatAgentApplication implements Application {
         if (!this.connector.ready) await this.connector.reconnectNow();
         return { state: this.connector.state, apiVersion: this.connector.handshake?.identity.apiVersion, methods: [...this.connector.methods], missingCapabilities: [...this.connector.missingCapabilities] };
       }
+      case 'pairing.start':
+        return this.connector.startPairing();
       case 'account.confirm':
         return this.confirmAccount(p as IpcMethods['account.confirm']['params']);
       case 'task.create':

@@ -46,18 +46,22 @@ test('rehearsal A01–A04: connect (handshake, contract, capabilities, principal
   const before = await snapshotOf(stack);
   assert.equal(before.connection.product, 'AgentDesktop');
   assert.equal(before.connection.apiVersion, 'agentdesktop.runtime/1');
-  assert.deepEqual(before.connection.principal, { clientId: 'local:501', role: 'owner' }, 'the controlled development identity (owner), not a paired principal');
-  assert.equal(before.connection.state, 'unpaired', 'owner identity: observation allowed, outbound stays blocked');
+  // A4: the app is a paired client (the Fake Runtime enforces the grant), never the owner.
+  assert.deepEqual(before.connection.principal, { clientId: stack.clientId, role: 'paired' });
+  assert.equal(before.connection.state, 'ready');
+  assert.equal(before.connection.pairing.state, 'paired');
   assert.deepEqual(before.connection.missingCapabilities, []);
   assert.deepEqual(before.features.read_list, { enabled: true });
-  assert.equal(before.features.accept_request.enabled, false);
-  assert.equal((before.features.accept_request as { reason?: string }).reason, 'pairing_missing');
+  assert.notEqual((before.features.accept_request as { reason?: string }).reason, 'pairing_missing');
   const handshake = fake.requests.find((r) => r.method === 'runtime.handshake')!;
-  assert.deepEqual(handshake.params, { apiVersions: ['agentdesktop.runtime/1'], client: { name: 'wechat-agent-rehearsal', version: '0.1.0' } });
+  const shown = handshake.params.credential as { clientId: string; token: string };
+  assert.equal(shown.clientId, stack.clientId);
+  assert.deepEqual({ ...handshake.params, credential: undefined }, { apiVersions: ['agentdesktop.runtime/1'], client: { name: 'wechat-agent-rehearsal', version: '0.1.0' }, credential: undefined });
+  assert.ok(fake.requests.filter((r) => r.method !== 'runtime.handshake').every((r) => !JSON.stringify(r.params).includes(shown.token)), 'the credential goes into the handshake only');
   assert.equal(fake.callCount('runtime.capabilities'), 1);
-  // Setup steps: discover/contract done, pairing blocked (CR01), window bound, account done, baseline configured off.
+  // Setup steps: discover/contract/pairing done, window bound, account done, baseline configured off.
   const steps = Object.fromEntries(before.connection.steps.map((s) => [s.key, s.state]));
-  assert.deepEqual(steps, { discover: 'done', contract: 'done', pairing: 'blocked', window: 'done', account: 'done', baseline: 'done' });
+  assert.deepEqual(steps, { discover: 'done', contract: 'done', pairing: 'done', window: 'done', account: 'done', baseline: 'done' });
 
   // A02-ish: window.list was filtered by the WeChat bundleId on the app side and the bound window is that one.
   const bind = fake.requests.find((r) => r.method === 'window.bind')!;
@@ -89,7 +93,7 @@ test('rehearsal A01–A04: connect (handshake, contract, capabilities, principal
   assert.equal(run.phase, 'ended');
   assert.equal(run.outcome, 'success');
   assert.equal(run.closingReason, 'finished');
-  assert.deepEqual(run.events.map((e) => e.type), ['run.started', 'action.receipt', 'run.ended'], 'run.events: the evidence the plan asks for');
+  assert.deepEqual(run.events.map((e) => e.type), ['run.started', 'action.accepted', 'action.dispatched', 'action.completed', 'run.quiescent', 'run.ended'], 'run.events: the evidence the plan asks for');
 
   // The one click is the navigation to 通讯录, at the centre of the recognised control, in image pixels.
   const [click] = acts(stack);
@@ -134,7 +138,7 @@ test('rehearsal A01–A04: connect (handshake, contract, capabilities, principal
   const after = await snapshotOf(stack);
   assert.equal(after.counts.waitingApproval, 0);
   assert.equal(after.inputGate, 'open');
-  assert.equal(after.connection.state, 'unpaired');
+  assert.equal(after.connection.state, 'ready');
 });
 
 test('rehearsal A04 step 3: a list longer than one screen is reported partial (confirmed with coverage_partial), never end_confirmed', async (t) => {
@@ -218,7 +222,7 @@ test('rehearsal stop condition: the control connection drops during observe → 
   // Reconnect (as the person pressing "retry" would): a new handshake, re-bind, re-subscribe; the old Run is only never touched again.
   stack.mark();
   const check = await app.service.call('connection.check', {});
-  assert.equal(check.state, 'unpaired');
+  assert.equal(check.state, 'ready');
   await waitFor(async () => fake.connectionsAccepted, (n) => n === 4, 'control + events re-opened');
   const after = stack.methods(stack.since());
   assert.deepEqual(after.filter((m) => !['runtime.handshake', 'runtime.capabilities', 'desktop.list', 'window.list', 'window.bind', 'events.subscribe'].includes(m)), [], after.join(' > '));
@@ -226,7 +230,7 @@ test('rehearsal stop condition: the control connection drops during observe → 
   assert.equal(fake.callCount('run.attach'), 0);
   assert.equal(fake.callCount('run.start'), 1);
   const resumed = await snapshotOf(stack);
-  assert.equal(resumed.connection.state, 'unpaired');
+  assert.equal(resumed.connection.state, 'ready');
   assert.equal(resumed.inputGate, 'closed', 'the gate stays closed until an explicit app.resume');
   await assertReadOnly(stack, [created.taskId]);
 });
@@ -279,7 +283,7 @@ test('rehearsal stop condition: observe gets no reply within the deadline → bl
   // The person presses retry: a fresh connection, a new handshake; the parked task is not replayed.
   stack.mark();
   const check = await app.service.call('connection.check', {});
-  assert.equal(check.state, 'unpaired', `reconnect after a timeout must succeed: ${(await snapshotOf(stack)).connection.steps.map((s) => `${s.key}=${s.state}${s.detail ? `(${s.detail})` : ''}`).join(' ')}`);
+  assert.equal(check.state, 'ready', `reconnect after a timeout must succeed: ${(await snapshotOf(stack)).connection.steps.map((s) => `${s.key}=${s.state}${s.detail ? `(${s.detail})` : ''}`).join(' ')}`);
   assert.equal(driver.state, 'connected');
   assert.ok(stack.since().some((r) => r.method === 'runtime.handshake'), 'a new handshake, not the stale socket');
   assert.equal(fake.callCount('run.start'), 1, 'nothing resumed, nothing restarted');
@@ -291,9 +295,9 @@ test('rehearsal stop condition: observe gets no reply within the deadline → bl
 
 test('rehearsal stop condition: the bound window changes (windowId/generation) between the approval and the re-observe → stopped as approval_invalid (waiting_user), no dangerous click', async (t) => {
   // The only flow that anchors on the window is a write flow; the rehearsal runs it up to the pre-write check and proves the check stops it.
-  // A paired principal is required for the feature to be enabled; this is the Fake Runtime, no real pairing exists (CR01).
+  // A paired principal is required for the feature to be enabled; the stack starts the app paired on the A4 Fake Runtime.
   const detail = pageFacts({ page: 'request_detail', detail: { name: NAME, wechatId: 'wxid_fixture_a', buttons: [{ text: '接受', rect: { x: 1500, y: 900, width: 200, height: 80 }, confidence: 0.95 }], confidence: 0.95 } });
-  const stack = await startFakeStack(t, { fake: { principal: { clientId: 'app:wechat-agent', role: 'paired' } }, facts: [newFriendsPage([requestRow(NAME, 'pending')]), detail, detail] });
+  const stack = await startFakeStack(t, { facts: [newFriendsPage([requestRow(NAME, 'pending')]), detail, detail] });
   const { fake, app, ledger } = stack;
   await app.start();
   const created = await createAccept(app.service, { operationId: 'op_stage4_window' });

@@ -251,19 +251,19 @@ test('subscribe: own connection, frames parsed, cursor follows, iterator ends wh
   await driver.finishRun(runId, 'success');
   const frames: EventFrame[] = [];
   for await (const frame of stream) frames.push(frame);
-  assert.deepEqual(frames.map((f) => f.event.type), ['run.started', 'action.receipt', 'run.ended']);
-  assert.deepEqual(frames.map((f) => f.event.sequence), [1, 2, 3]);
-  assert.equal(stream.cursor, 3);
+  assert.deepEqual(frames.map((f) => f.event.type), ['run.started', 'action.accepted', 'action.dispatched', 'action.completed', 'run.quiescent', 'run.ended']);
+  assert.deepEqual(frames.map((f) => f.event.sequence), [1, 2, 3, 4, 5, 6]);
+  assert.equal(stream.cursor, 6);
   assert.equal(frames[1].event.data.requestId, 'rq_ev_1');
   // Resume from the cursor: nothing new, the stream ends again without throwing.
   const resumed = await driver.subscribe({ runId, after: stream.cursor });
   const later: EventFrame[] = [];
   for await (const frame of resumed) later.push(frame);
   assert.deepEqual(later, []);
-  assert.equal(resumed.cursor, 3);
+  assert.equal(resumed.cursor, 6);
   assert.equal(driver.state, 'connected');
   const subscribes = fake.requests.filter((r) => r.method === 'events.subscribe');
-  assert.deepEqual(subscribes.map((r) => r.params), [{ runId }, { runId, after: 3 }]);
+  assert.deepEqual(subscribes.map((r) => r.params), [{ runId }, { runId, after: 6 }]);
   assert.ok(subscribes.every((r) => r.connectionId !== fake.requests[0].connectionId), 'subscriptions use their own connection');
 });
 
@@ -339,7 +339,7 @@ test('outbound requests are validated against runtime.schema.json before sending
   await driver.connect();
   const { sessionId, runId } = await openRun(driver);
   const snap = await driver.observe({ sessionId, runId }, { screenshot: false });
-  const bogus = { kind: 'hover', target: { elementRef: 'el_1' } } as unknown as Action;
+  const bogus = { kind: 'teleport', target: { elementRef: 'el_1' } } as unknown as Action;
   await assert.rejects(driver.act({ sessionId, runId }, { snapshotId: snap.snapshotId, action: bogus }, 'rq_bad'), (e) => {
     driverError(e, 'schema_invalid', { phase: 'local', notSent: true });
     assert.ok(((e as DriverError).error.details?.problems as string[]).length > 0);

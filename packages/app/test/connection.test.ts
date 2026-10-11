@@ -32,33 +32,34 @@ test('T01: platform unreachable → connection page, every feature platform_offl
   await h.app.stop();
 });
 
-test('T03: unpaired principal → outbound features pairing_missing, tasks blocked, act=0; reading still works', async () => {
-  const driver = new FakeDriver({ principalRole: 'owner' });
+test('T03 (A4): unpaired → every feature pairing_missing, reading included; nothing but pairing is asked of the Runtime, act=0', async () => {
+  const driver = new FakeDriver();
   const h = await makeHarness({ driver, handlers: [readStub(() => [{ rowKey: 'r1', status: 'pending', name: '陈一' }]), acceptStub(), sendStub()] });
-  let snap = await h.snapshot();
+  const snap = await h.snapshot();
   assert.equal(snap.connection.state, 'unpaired');
-  assert.equal(snap.connection.principal?.role, 'owner');
+  assert.equal(snap.connection.principal?.role, 'unpaired');
+  assert.equal(snap.connection.pairing.state, 'unpaired');
   assert.equal(snap.connection.steps.find((s) => s.key === 'pairing')?.state, 'blocked');
-  await h.confirmAccount();
-  snap = await h.snapshot();
-  assert.equal(snap.account?.status, 'confirmed');
-  assert.deepEqual(snap.features.read_list, { enabled: true });
-  for (const key of ['accept_request', 'send_message'] as const) {
-    assert.equal(snap.features[key].enabled, false);
-    assert.equal((snap.features[key] as { reason: string }).reason, 'pairing_missing');
-  }
-  const policy = await h.ledger.getPolicy();
-  await h.ledger.setPolicy({ ...policy, allowlist: ['chat_a'] }, policy.revision);
-  const view = await h.call('task.create', sendParams('op-send', snap.account!.revision));
-  assert.equal(view.state, 'blocked');
-  assert.equal(view.stateReason, 'pairing_missing');
-  const accept = await h.call('task.create', { operationId: 'op-accept', type: 'accept_request', expectedAccountRevision: snap.account!.revision, payload: { kind: 'accept_request', requestKey: 'r1' } });
-  assert.equal(accept.state, 'blocked');
-  assert.equal(accept.stateReason, 'pairing_missing');
-  // A read-only task runs to completion through the platform without any act.
-  const read = await h.call('task.create', { operationId: 'op-read', type: 'read_requests', expectedAccountRevision: snap.account!.revision, payload: { kind: 'read_requests' } });
-  await waitState(h, read.taskId, 'confirmed');
-  assert.ok(h.calls('observe') >= 1);
+  assert.equal(snap.connection.steps.find((s) => s.key === 'window')?.state, 'blocked');
+  for (const feature of Object.values(snap.features)) assert.equal((feature as { reason?: string }).reason, 'pairing_missing');
+  // The Runtime answers an unpaired app nothing but pairing: the app does not even ask.
+  for (const method of ['listDesktops', 'listWindows', 'bindWindow', 'openSession', 'observe', 'subscribe', 'act']) assert.equal(h.calls(method), 0, method);
+  assert.equal(snap.account, null);
+  await assert.rejects(h.call('task.create', { operationId: 'op-read', type: 'read_requests', expectedAccountRevision: 0, payload: { kind: 'read_requests' } }), expectIpc('blocked'));
+  assert.equal(h.acts(), 0);
+  await h.app.stop();
+});
+
+test('T03b (A4): a handshake that says owner is not used: the app never runs as owner', async () => {
+  const driver = new FakeDriver({ principalRole: 'owner' });
+  const h = await makeHarness({ driver, handlers: [readStub(() => []), acceptStub(), sendStub()] });
+  const snap = await h.snapshot();
+  assert.equal(snap.connection.state, 'unpaired');
+  assert.equal(snap.connection.steps.find((s) => s.key === 'pairing')?.state, 'failed');
+  assert.match(snap.connection.steps.find((s) => s.key === 'pairing')?.detail ?? '', /不以所有者身份运行/);
+  for (const feature of Object.values(snap.features)) assert.equal((feature as { reason?: string }).reason, 'pairing_missing');
+  assert.equal(h.calls('listDesktops'), 0);
+  assert.equal(h.calls('observe'), 0);
   assert.equal(h.acts(), 0);
   await h.app.stop();
 });

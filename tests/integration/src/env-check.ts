@@ -138,8 +138,8 @@ export async function runEnvCheck(options: { endpoint?: string; repoRoot: string
       if (!rt.apiVersions.includes(RUNTIME_API_VERSION)) reasons.push(`apiVersions ${rt.apiVersions.join(',')} 不含 ${RUNTIME_API_VERSION}`);
       if (rt.missing.length) reasons.push(`平台缺少方法：${rt.missing.join(', ')}`);
       for (const [perm, state] of Object.entries(rt.permissions)) if (state !== 'granted') reasons.push(`平台权限 ${perm} = ${state}（观察需要 granted）`);
-      if (!rt.principal) warnings.push('握手未返回 principal（冻结的 RuntimeIdentity 还没有 principal 字段）：只读步骤可做，外发保持 blocked');
-      else if (rt.principal.role !== 'paired') warnings.push(`principal.role=${rt.principal.role}（${rt.principal.clientId}）：受控开发模式，不是 CR01 的配对身份；只读步骤可做，外发保持 blocked`);
+      if (!rt.principal) warnings.push('握手未返回 principal：这个 Runtime 早于 A4（agentdesktop #137），本应用需要 bb02b59 或更新的版本');
+      else if (rt.principal.role !== 'paired') warnings.push(`principal.role=${rt.principal.role}（${rt.principal.clientId}）：未配对，Runtime 只回答配对请求；见 docs/acceptance/a4-pairing.md`);
       const admission = rt.status.inputAdmission;
       if (admission !== undefined && admission !== 'enabled') warnings.push(`runtime.status.inputAdmission=${String(admission)}：导航点击会被 input_disabled 拒绝（只读 observe 不受影响）`);
     }

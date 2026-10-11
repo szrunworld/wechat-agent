@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { RequestRow } from '@wechat-agent/ports';
 import { identityCandidates } from '../src/identity.ts';
+import { canonicalEllipsis } from '../src/text.ts';
 import { requestSection } from '../src/analyze.ts';
 import { profile, word } from './helpers.ts';
 
@@ -31,6 +32,27 @@ test('T11 a truncated name is ambiguous even when it is the only match', () => {
   assert.equal(out.reason, 'truncated_name');
   const prefix = identityCandidates([row('林小')], '林小雨');
   assert.equal(prefix.ambiguous, true, 'a shown name that is only a prefix of the full name is not proof');
+});
+
+test('T11 the truncation mark counts whichever ellipsis glyph Vision returns', () => {
+  for (const mark of ['…', '⋯', '‥']) {
+    const out = identityCandidates([row(`昵称特别长的合成${mark}`)], '昵称特别长的合成用户名');
+    assert.equal(out.ambiguous, true, mark);
+    assert.equal(out.reason, 'truncated_name', mark);
+  }
+  const other = identityCandidates([row('昵称特别长的合成⋯')], '王大为');
+  assert.equal(other.reason, 'not_found', 'a cut name still has to match the name it is cut from');
+});
+
+test('T11 a long name that runs into its status keeps the truncation mark, whatever junk Vision reads around it', () => {
+  // CI's Vision read the new-friends-mixed row as "昵称特别长的合成⋯.•已添加".
+  for (const text of ['昵称特别长的合成…已添加', '昵称特别长的合成⋯.•已添加', '昵称特别长的合成… • 已添加', '昵称特别长的合成..•已添加']) {
+    const section = requestSection([word('新的朋友', 75, 114, 76, 17), word(text, 133, 160, 155, 16), word('群聊', 75, 260, 30, 16)].map((w) => ({ ...w, text: canonicalEllipsis(w.text) })), profile);
+    assert.deepEqual(section?.rows.map((r) => [r.name, r.status]), [['昵称特别长的合成…', 'added']], text);
+    assert.equal(identityCandidates(section!.rows, '昵称特别长的合成用户名').reason, 'truncated_name', text);
+  }
+  const whole = requestSection([word('新的朋友', 75, 114, 76, 17), word('王大为 • 已添加', 133, 160, 155, 16), word('群聊', 75, 260, 30, 16)], profile);
+  assert.deepEqual(whole?.rows.map((r) => r.name), ['王大为'], 'a bullet alone is not a truncation mark');
 });
 
 test('T11 a low-confidence read is ambiguous', () => {

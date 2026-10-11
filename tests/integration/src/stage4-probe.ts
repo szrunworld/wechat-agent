@@ -57,7 +57,7 @@ async function main(): Promise<number> {
   // S1-2 authentication: CR01 is pairing. An owner principal is the controlled development exception, not CR01.
   add('S1-2', 'principal is a paired app (CR01)', principalRole === 'paired' ? 'passed' : 'blocked', {
     role: principalRole ?? null,
-    note: principalRole === 'paired' ? 'paired principal' : 'local owner: controlled development mode only; outbound stays blocked (hub.pairing.* reserved, PR3)',
+    note: principalRole === 'paired' ? 'paired principal' : 'not paired: since agentdesktop #137 (A4) an unpaired connection may only pair; see docs/acceptance/a4-pairing.md',
   });
 
   // S1-3 capabilities: every method the app needs is implemented.

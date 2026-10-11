@@ -147,7 +147,7 @@
       "code": "limit_exceeded",
       "exitCode": 5,
       "phase": "handler",
-      "reserved": true,
+      "reserved": false,
       "description": "A configured limit (steps, time, budget, quota) refused or ended the work."
     },
     {
@@ -173,29 +173,25 @@
       "code": "pairing_required",
       "exitCode": 4,
       "phase": "handler",
-      "reserved": true,
       "description": "The client is not paired; pair it in AgentDesktop before calling this method."
     },
     {
       "code": "client_revoked",
       "exitCode": 4,
       "phase": "handler",
-      "reserved": true,
-      "description": "The client was removed; its credential no longer works."
+      "description": "The client was removed; its credential no longer works. On a write the service already did, details.writeOutcome is \"completed\", notSent is false and details.recovery is \"check_outcome_do_not_resubmit\": pairing again gives a new client id that cannot look the request up, so check the outcome and do not submit it again."
     },
     {
       "code": "grant_missing",
       "exitCode": 4,
       "phase": "handler",
-      "reserved": true,
-      "description": "The capability, Desktop or app is not in the client's grant."
+      "description": "The capability, Desktop or app is not in the client's grant. On a write the service already did, details.writeOutcome is \"completed\", notSent is false and details.recovery is \"look_up_same_request_id\": only the answer is withheld."
     },
     {
       "code": "grant_expired",
       "exitCode": 4,
       "phase": "handler",
-      "reserved": true,
-      "description": "The grant that covered this has expired."
+      "description": "The grant that covered this has expired. On a write the service already did, details.writeOutcome is \"completed\", notSent is false and details.recovery is \"look_up_same_request_id\": only the answer is withheld."
     },
     {
       "code": "permit_expired",
@@ -222,8 +218,7 @@
       "code": "unsupported_backend",
       "exitCode": 6,
       "phase": "handler",
-      "reserved": true,
-      "description": "The backend cannot do this action in the background; it is not done in the foreground instead."
+      "description": "The backend cannot do this action in the background without side effects (act kind drag on macOS: background_drag_unsupported; act kind hover on macOS, which would be a middle click: background_hover_activates); it is not done another way instead. notSent: true, details.reason says which."
     },
     {
       "code": "capability_mismatch",

@@ -79,7 +79,7 @@ for (const file of expectedFiles) {
       assert.equal(facts.requests?.length, expected.requests.length, detailMsg());
       expected.requests.forEach((want, i) => {
         const got = facts.requests![i];
-        assert.ok(same(got.name, want.name), `row ${i}: name ${JSON.stringify(got.name)} vs ${JSON.stringify(want.name)}`);
+        assert.ok(same(got.name, want.name), `row ${i}: name ${JSON.stringify(got.name)} vs ${JSON.stringify(want.name)}; ${detailMsg()}`);
         assert.equal(got.status, want.status, `row ${i} (${want.name}) status`);
         if (want.note !== undefined) assert.ok(same(got.note, want.note), `row ${i} note ${JSON.stringify(got.note)}`);
         if (want.actionRect !== undefined) assert.equal(Boolean(got.actionRect), want.actionRect, `row ${i} actionRect`);

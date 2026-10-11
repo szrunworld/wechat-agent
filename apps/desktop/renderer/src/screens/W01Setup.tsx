@@ -5,7 +5,7 @@ import { IdentityText } from '../components/IdentityText.tsx';
 import { KeyValue } from '../components/KeyValue.tsx';
 import { Notice } from '../components/Notice.tsx';
 import { StatusBadge, type Tone } from '../components/StatusBadge.tsx';
-import { ACCOUNT_STATUS, CONNECTION_DETAIL, CONNECTION_STATE, SETUP_STEP, STEP_STATE, formatTime } from '../copy.ts';
+import { ACCOUNT_STATUS, CAPABILITY_LABEL, CONNECTION_DETAIL, CONNECTION_STATE, PAIRING_STATE, SETUP_STEP, STEP_STATE, formatTime } from '../copy.ts';
 import { canConfirmAccount } from '../rules.ts';
 import type { ScreenProps } from './index.ts';
 
@@ -17,7 +17,10 @@ export function W01Setup({ snapshot, call, run, busy }: ScreenProps) {
   const [check, setCheck] = useState<IpcMethods['connection.check']['result'] | null>(null);
   const failed = connection.steps.find((s) => s.state === 'failed');
   const blocked = connection.steps.find((s) => s.state === 'blocked');
-  const connTone: Tone = connection.state === 'ready' ? 'ok' : connection.state === 'connecting' ? 'info' : 'danger';
+  const connTone: Tone = connection.state === 'ready' ? 'ok' : connection.state === 'connecting' || connection.state === 'pairing' ? 'info' : 'danger';
+  const { pairing } = connection;
+  const canPair = (connection.state === 'unpaired' || connection.state === 'revoked') && pairing.state !== 'waiting';
+  const coolingDown = pairing.retryAfter !== undefined && Date.parse(pairing.retryAfter) > Date.now();
 
   return (
     <section aria-labelledby="w01-title">
@@ -44,9 +47,39 @@ export function W01Setup({ snapshot, call, run, busy }: ScreenProps) {
         <Notice tone="danger" title={`停在"${SETUP_STEP[failed.key]}"`}>{failed.detail ?? '该步骤失败。'} 后面的步骤不会继续。</Notice>
       ) : blocked ? (
         <Notice tone="warn" title={`下一步：${SETUP_STEP[blocked.key]}`}>
-          {blocked.key === 'pairing' ? '需要在 AgentDesktop 里完成配对后再继续；本应用不会申请 owner 权限绕过它。' : blocked.key === 'account' ? '请在下面核对账号后确认。' : '等待该步骤完成。'}
+ {blocked.key === 'pairing' ? '需要在 AgentDesktop 里完成配对后再继续；本应用不会以所有者身份连接，也没有绕过配对的办法。' : blocked.key === 'account' ? '请在下面核对账号后确认。' : '等待该步骤完成。'}
         </Notice>
       ) : null}
+
+      <h2>配对</h2>
+      <div className="card" aria-live="polite">
+        <KeyValue rows={[
+          { k: '状态', v: <StatusBadge tone={pairing.state === 'paired' ? 'ok' : pairing.state === 'waiting' ? 'info' : pairing.state === 'unpaired' ? 'neutral' : 'danger'}>{PAIRING_STATE[pairing.state]}</StatusBadge> },
+          ...(pairing.shortCode ? [{ k: '配对码', v: <code>{pairing.shortCode}</code> }] : []),
+          ...(pairing.expiresAt && pairing.state === 'waiting' ? [{ k: '申请有效至', v: formatTime(pairing.expiresAt) }] : []),
+          ...(pairing.clientId ? [{ k: '客户端', v: <code>{pairing.clientId}</code> }] : []),
+          ...(pairing.codeIdentityLevel ? [{ k: '代码身份', v: pairing.codeIdentityLevel }] : []),
+          ...(pairing.grant ? [
+            { k: '授权能力', v: pairing.grant.capabilities.map((c) => CAPABILITY_LABEL[c] ?? c).join('；') || '无' },
+            { k: '授权桌面', v: pairing.grant.desktops.map((d) => (d === 'created' ? '本应用创建的桌面' : d)).join('、') || '无' },
+            { k: '授权应用', v: pairing.grant.apps.join('、') || '无' },
+            { k: '授权到期', v: formatTime(pairing.grant.expiresAt) },
+          ] : []),
+          ...(pairing.retryAfter ? [{ k: '可再次申请', v: formatTime(pairing.retryAfter) }] : []),
+        ]} />
+        {pairing.state === 'waiting' ? (
+          <Notice tone="info" title="请到 AgentDesktop 确认">AgentDesktop 会弹出确认窗口。核对窗口里的配对码与上面一致、申请的权限与上面列出的一致后，用 Touch ID 批准。本应用不会替你批准。</Notice>
+        ) : null}
+        {pairing.refusal ? <Notice tone="warn" title="AgentDesktop 的答复">{pairing.refusal.message}</Notice> : null}
+        {pairing.detail ? <p className="muted">{pairing.detail}</p> : null}
+        {canPair ? (
+          <div className="actions">
+            <ActionButton busy={busy} decision={coolingDown ? { ok: false, reasons: ['刚被拒绝，一分钟后才能再次申请'] } : { ok: true, reasons: [] }} onClick={() => run('申请配对', () => call('pairing.start', {}))}>
+              {pairing.state === 'revoked' ? '重新申请配对' : '申请配对'}
+            </ActionButton>
+          </div>
+        ) : null}
+      </div>
 
       <h2>连接信息</h2>
       <KeyValue rows={[

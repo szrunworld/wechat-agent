@@ -1,18 +1,29 @@
 // Every user-facing string of the renderer, keyed by the frozen enums of
 // @wechat-agent/ports. Each abnormal state has its own wording (lane F rule 3);
 // nothing is conveyed by colour alone.
-import type { ConnectionState, DomainReasonCode, FeatureKey, FeatureState, InputGateState, SetupStep, TaskState, TaskType, TargetKind, Coverage, IpcError } from '@wechat-agent/ports';
+import type { ConnectionState, DomainReasonCode, FeatureKey, FeatureState, InputGateState, PairingView, SetupStep, TaskState, TaskType, TargetKind, Coverage, IpcError } from '@wechat-agent/ports';
 
 export const CONNECTION_STATE: Record<ConnectionState, string> = {
-  disconnected: '未连接', connecting: '连接中', incompatible: '协议不兼容', unpaired: '未配对', ready: '就绪',
+  disconnected: '未连接', connecting: '连接中', incompatible: '协议不兼容', unpaired: '未配对', pairing: '等待确认', ready: '已配对', no_access: '授权不可用', revoked: '已撤销',
 };
 
 export const CONNECTION_DETAIL: Record<ConnectionState, string> = {
   disconnected: '平台离线：没有连上 AgentDesktop。本应用不会自行启动、移动或点击微信；在平台恢复前所有外发功能保持关闭，等待恢复后只重连观察，不重放任何动作。',
   connecting: '正在连接 AgentDesktop……',
   incompatible: '协议不兼容：平台提供的 runtime 版本或方法集合与本应用需要的 agentdesktop.runtime/1 不一致。请升级 AgentDesktop 或本应用，功能全部关闭。',
-  unpaired: '未配对：本应用尚未取得 AgentDesktop 的配对身份（CR01）。在配对完成前只能读取，不能执行任何外发动作。',
-  ready: '已连上 AgentDesktop，契约校验通过。',
+  unpaired: '未配对：本应用还没有 AgentDesktop 的配对身份。AgentDesktop 对未配对的程序只回答配对请求，读取和外发都不可用。点"申请配对"后，到 AgentDesktop 的确认窗口里核对配对码，再用 Touch ID 批准。',
+  pairing: '等待确认：配对申请已发给 AgentDesktop。请到它的确认窗口核对配对码与申请的权限，确认无误后用 Touch ID 批准；拒绝或超时后一分钟内不能再申请。',
+  ready: '已配对：已连上 AgentDesktop，契约校验通过。能访问的范围以 AgentDesktop 批准的授权为准，配对不等于能看所有窗口。',
+  no_access: '授权不可用：本应用已配对，但授权已过期或被收回。请在 AgentDesktop 中续期或重新授权，然后点"重新检查连接"；本应用不会自行反复重连。',
+  revoked: '已撤销：本应用在 AgentDesktop 中的授权已被撤销（或保存的凭据不再被认可）。旧凭据已删除，所有受保护的操作都被拒绝；需要重新申请配对。',
+};
+
+export const PAIRING_STATE: Record<PairingView['state'], string> = {
+  unpaired: '未配对', waiting: '等待确认', paired: '已配对', denied: '未获批准', expired: '申请已失效', revoked: '已撤销', no_access: '授权不可用',
+};
+
+export const CAPABILITY_LABEL: Record<string, string> = {
+  observe: '查看（桌面/窗口列表、截图与元素）', act: '操作（打开会话、发送输入）', 'desktop.manage': '管理桌面（绑定窗口）', run: '运行（Run 与事件）', 'unit.run': 'GUI 单元任务',
 };
 
 export const INPUT_GATE: Record<InputGateState, string> = {
@@ -32,7 +43,8 @@ export const FEATURE_LABEL: Record<FeatureKey, string> = {
 
 type DisabledReason = Exclude<FeatureState, { enabled: true }>['reason'];
 export const FEATURE_REASON: Record<DisabledReason, string> = {
-  pairing_missing: '未与 AgentDesktop 配对（CR01）',
+  pairing_missing: '未与 AgentDesktop 配对',
+  grant_missing: 'AgentDesktop 授权不足或已过期',
   capability_missing: '平台未提供所需能力',
   policy_disabled: '已被策略禁用',
   platform_offline: '平台离线',
@@ -60,7 +72,7 @@ export const TASK_STATE_DETAIL: Partial<Record<TaskState, string>> = {
 };
 
 export const REASON: Record<DomainReasonCode, string> = {
-  capability_missing: '平台能力缺失', pairing_missing: '未配对', policy_disabled: '策略禁用', write_gate_closed: '写入门已关闭',
+  capability_missing: '平台能力缺失', pairing_missing: '未配对', grant_missing: '授权不足：AgentDesktop 的授权不覆盖这个操作', policy_disabled: '策略禁用', write_gate_closed: '写入门已关闭',
   content_mismatch: '内容不一致：输入框里的文字与批准的正文不符，已停止，不会发送默认文案',
   target_ambiguous: '身份歧义：无法唯一确定对象（重名、截断或缺少可见标识）',
   identity_unproven: '身份未证实：缺少足够的身份证据',

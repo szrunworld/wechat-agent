@@ -8,8 +8,8 @@ import { RESEND, mount } from './helpers.tsx';
 
 const states = Object.keys(sampleSnapshots) as SnapshotKey[];
 
-describe('six screens × thirteen states', () => {
-  expect(states).toHaveLength(13);
+describe('six screens × sixteen states', () => {
+  expect(states).toHaveLength(16);
   for (const s of SCREENS) {
     for (const state of states) {
       it(`${s.key} renders in ${state}`, async () => {

@@ -20,6 +20,7 @@ import { FakeDriver, InMemoryLedger, type FakeDriverOptions } from '@wechat-agen
 import { openLedger } from '@wechat-agent/ledger';
 import { createHandlers } from '@wechat-agent/handlers';
 import { createApplication, MemorySink, type AppConfig, type OutboxSink, type Scheduler } from '@wechat-agent/app';
+import type { CredentialStore } from '@wechat-agent/ports';
 import { GatedRecognizer, T0, clock, observation } from './fixtures.ts';
 import { createStubApplication, type Application } from './stub-app.ts';
 import { createStubHandlers } from './stub-handlers.ts';
@@ -47,6 +48,8 @@ export interface SliceOptions {
   quiescenceTimeoutMs?: number;
   /** Timer seam of the real app (reconnect backoff, event re-subscribe, patrol); default: real timers. */
   scheduler?: Scheduler;
+  /** Real app only: where the pairing credential lives (default: memory, unpaired). */
+  credentials?: CredentialStore;
 }
 
 export interface Slice {
@@ -102,7 +105,7 @@ export async function createSlice(options: SliceOptions = {}): Promise<Slice | R
   const appKind = options.app ?? (real.has('app') ? 'real' : 'stub');
   const outbox = appKind === 'real' ? options.outboxSink ?? new MemorySink() : undefined;
   const app: Application = appKind === 'real'
-    ? createApplication({ driver, ledger, recognizer, handlers, now, scheduler: options.scheduler, outboxSink: outbox, config: { ...REAL_APP_SLICE_CONFIG, ...options.appConfig } })
+    ? createApplication({ driver, ledger, recognizer, handlers, now, scheduler: options.scheduler, outboxSink: outbox, credentials: options.credentials, config: { ...REAL_APP_SLICE_CONFIG, ...options.appConfig } })
     : createStubApplication({ driver, ledger, recognizer, handlers, now, quiescenceTimeoutMs: options.quiescenceTimeoutMs });
 
   return { driver: driver as FakeDriver, ledger, recognizer, handlers, app, now, outbox };

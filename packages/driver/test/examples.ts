@@ -4,6 +4,9 @@ import type { RuntimeRequest } from '@wechat-agent/ports';
 
 export const CLIENT = { name: 'WeChat Agent', version: '0.1.0-test' };
 
+/** runtime.handshake with a paired client's credential (A4). */
+export const HANDSHAKE_WITH_CREDENTIAL = { apiVersions: [RUNTIME_API_VERSION], client: CLIENT, credential: { clientId: 'app:0123456789abcdef', token: `adt1_${'A'.repeat(43)}` } };
+
 export const PARAMS_EXAMPLES: Record<string, Record<string, unknown>> = {
   'runtime.handshake': { apiVersions: [RUNTIME_API_VERSION], client: CLIENT },
   'runtime.status': {},
@@ -33,7 +36,8 @@ export const PARAMS_EXAMPLES: Record<string, Record<string, unknown>> = {
   'run.cancel': { runId: 'run_1' },
   'run.list': { active: true, limit: 50 },
   'runtime.stopAll': { scope: 'all_platform_runs' },
-  'runtime.enableInput': {},
+  'hub.pairing.start': { agentName: 'WeChat Agent', requested: { capabilities: ['observe', 'act', 'desktop.manage', 'run'], desktops: ['created'], apps: ['com.tencent.xinWeChat'], durationSeconds: 86400 } },
+  'hub.pairing.status': { pairingId: 'pair_1' },
   'artifact.show': { artifactId: 'art_1' },
   'artifact.read': { artifactId: 'art_1', offset: 0, length: 524288 },
   'events.subscribe': { runId: 'run_1', after: 0 },

@@ -94,10 +94,11 @@
         },
         "notSent": {
           "type": "boolean",
-          "description": "true only when it is certain the request never reached the Runtime"
+          "description": "not_performed: true only when the Runtime (or the client, before sending) can prove this request sent no input and made no write with an outside effect, whether or not it reached the Runtime. Never true for a partial send, a timeout, a lost connection, a missing receipt or an unknown outcome. Not a licence to retry: a retry is judged again by authorization, Run state, stops, policy and the request ledger."
         },
         "details": {
-          "type": "object"
+          "type": "object",
+          "description": "Code-specific facts. writeOutcome \"completed\" (#203): a write the service did before the caller lost its access (client_revoked, grant_missing, grant_expired); its answer is withheld and notSent is false. recovery then says how to find the outcome: \"look_up_same_request_id\" (grant_expired, grant_missing: the client keeps its id, so the same requestId reads it; a new one would write again) or \"check_outcome_do_not_resubmit\" (client_revoked: pairing again gives a new client id the request ledger does not know)."
         }
       }
     },
@@ -200,6 +201,9 @@
               "maxLength": 64
             }
           }
+        },
+        "credential": {
+          "$ref": "#/$defs/Credential"
         }
       }
     },
@@ -336,6 +340,9 @@
               "type": "string"
             }
           }
+        },
+        "principal": {
+          "$ref": "#/$defs/Principal"
         }
       }
     },
@@ -490,6 +497,74 @@
         "gui": {
           "type": "object",
           "description": "what the GUI execution backend supports, as the AI service reports it (ai-gui/v1 runtime_capabilities_result); absent while that service is not running"
+        },
+        "regionObservation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "method",
+            "maxWidth"
+          ],
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "observe.region"
+            },
+            "maxWidth": {
+              "const": 4096
+            }
+          }
+        },
+        "liveObservation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "method",
+            "maxFPS",
+            "maxWidth"
+          ],
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "observe.subscribe"
+            },
+            "maxFPS": {
+              "const": 2
+            },
+            "maxWidth": {
+              "const": 1920
+            }
+          }
+        },
+        "bindingRecovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "version",
+            "statusMethod",
+            "recoveryMethod",
+            "requiresConfirmation"
+          ],
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "statusMethod": {
+              "const": "desktop.bindingStatus"
+            },
+            "recoveryMethod": {
+              "const": "desktop.recoverBinding"
+            },
+            "requiresConfirmation": {
+              "const": true
+            }
+          }
         }
       }
     },
@@ -508,6 +583,13 @@
         },
         "name": {
           "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "virtual",
+            "physical"
+          ],
+          "description": "virtual: a display the Runtime created and destroys; physical: one of the user's displays, attached; absent means virtual"
         },
         "state": {
           "enum": [
@@ -535,6 +617,9 @@
         "openSessions": {
           "type": "integer",
           "minimum": 0
+        },
+        "control": {
+          "$ref": "#/$defs/DesktopControl"
         }
       }
     },
@@ -728,6 +813,19 @@
           "type": "integer",
           "minimum": 240,
           "maximum": 3384
+        },
+        "physical": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "attach one of the user's own displays instead of creating a virtual one: nothing is created, window.bind needs windowId and never moves the window, app.launch is refused, desktop.destroy only drops the record; with physical, width and height are refused (the display's size applies)",
+          "properties": {
+            "displayId": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "a physical display's ID; default the main display",
+              "maximum": 4294967295
+            }
+          }
         }
       },
       "dependentRequired": {
@@ -737,6 +835,18 @@
         "height": [
           "width"
         ]
+      },
+      "if": {
+        "required": [
+          "physical"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "width"
+          ]
+        }
       }
     },
     "desktop_destroy_params": {
@@ -924,6 +1034,10 @@
         },
         "boundAt": {
           "$ref": "#/$defs/Timestamp"
+        },
+        "windowGrantId": {
+          "$ref": "#/$defs/Id",
+          "description": "the caller's window grant this binding was made under; absent for the owner's bindings and an app's own launched windows"
         }
       }
     },
@@ -1135,6 +1249,13 @@
         },
         "transform": {
           "$ref": "#/$defs/ImageTransform"
+        },
+        "transient": {
+          "type": "boolean",
+          "description": "true: kept only briefly (no persist permission for the window); gone at expiresAt or when the window grant ends"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
         }
       }
     },
@@ -1289,6 +1410,14 @@
         },
         "outcome": {
           "type": "object"
+        },
+        "clientId": {
+          "type": "string",
+          "description": "the principal that made the request"
+        },
+        "desktopId": {
+          "$ref": "#/$defs/Id",
+          "description": "the Desktop the request named (absent for records older than A5 or naming none)"
         }
       }
     },
@@ -1347,7 +1476,10 @@
             "click",
             "type",
             "key",
-            "scroll"
+            "scroll",
+            "hover",
+            "press",
+            "drag"
           ]
         },
         "target": {
@@ -1398,6 +1530,10 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 50
+        },
+        "to": {
+          "$ref": "#/$defs/ActionTarget",
+          "description": "drag: where to release"
         }
       },
       "allOf": [
@@ -1468,8 +1604,190 @@
               "direction"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "hover"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "target"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "required": [
+                    "key"
+                  ]
+                },
+                {
+                  "required": [
+                    "modifiers"
+                  ]
+                },
+                {
+                  "required": [
+                    "button"
+                  ]
+                },
+                {
+                  "required": [
+                    "count"
+                  ]
+                },
+                {
+                  "required": [
+                    "direction"
+                  ]
+                },
+                {
+                  "required": [
+                    "amount"
+                  ]
+                },
+                {
+                  "required": [
+                    "to"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "press"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "target"
+            ],
+            "properties": {
+              "target": {
+                "required": [
+                  "elementRef"
+                ]
+              }
+            },
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "required": [
+                    "key"
+                  ]
+                },
+                {
+                  "required": [
+                    "modifiers"
+                  ]
+                },
+                {
+                  "required": [
+                    "button"
+                  ]
+                },
+                {
+                  "required": [
+                    "count"
+                  ]
+                },
+                {
+                  "required": [
+                    "direction"
+                  ]
+                },
+                {
+                  "required": [
+                    "amount"
+                  ]
+                },
+                {
+                  "required": [
+                    "to"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "drag"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "target",
+              "to"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "required": [
+                    "key"
+                  ]
+                },
+                {
+                  "required": [
+                    "button"
+                  ]
+                },
+                {
+                  "required": [
+                    "count"
+                  ]
+                },
+                {
+                  "required": [
+                    "direction"
+                  ]
+                },
+                {
+                  "required": [
+                    "amount"
+                  ]
+                }
+              ]
+            }
+          }
         }
-      ]
+      ],
+      "description": "hover rests the pointer on the target; press is an accessibility press of one element (elementRef only), never an event click; drag goes from target to `to`. hover and drag are refused with unsupported_backend where the backend cannot do them in the background without side effects (macOS today: hover would be a middle click, drag would take the real pointer and the foreground), never done otherwise instead"
     },
     "act_params": {
       "type": "object",
@@ -2010,7 +2328,24 @@
         "data": {
           "type": "object"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "pattern": "^(run|action|stop)\\."
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "$ref": "#/$defs/PlatformRunEvent"
+          }
+        }
+      ]
     },
     "RunEvents": {
       "type": "object",
@@ -2288,20 +2623,30 @@
         "role",
         "connectionId"
       ],
-      "description": "Who the Runtime holds responsible for this connection. Reserved for handshake results (PR2b); paired apps arrive in PR3.",
+      "description": "who the Runtime holds this connection to be (A4): from the credential shown in runtime.handshake, never from params",
       "properties": {
         "clientId": {
           "type": "string",
-          "pattern": "^(local:[0-9]+|app:[A-Za-z0-9._-]{1,64})$"
+          "pattern": "^(local:[0-9]+|app:[A-Za-z0-9._-]{1,64}|unpaired:conn_[0-9a-f]{16})$"
         },
         "role": {
           "enum": [
             "owner",
-            "paired"
+            "paired",
+            "unpaired"
           ]
         },
         "connectionId": {
           "$ref": "#/$defs/Id"
+        },
+        "codeIdentityLevel": {
+          "enum": [
+            "verified",
+            "shared_interpreter",
+            "same_user",
+            "in_process"
+          ],
+          "description": "how far the Runtime can tell this connection's program from other processes of the user (A4 S2)"
         }
       }
     },
@@ -2538,6 +2883,13 @@
         },
         "runId": {
           "$ref": "#/$defs/Id"
+        },
+        "transient": {
+          "type": "boolean",
+          "description": "true: kept only briefly (no persist permission for the window); gone at expiresAt or when the window grant ends"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
         }
       }
     },
@@ -2591,7 +2943,7 @@
       }
     },
     "PlatformRunEvent": {
-      "description": "the events the Runtime writes on every Run; RunEvent types with the prefix run., action. or stop. are these. The prefix unit. is the GUI unit's own (documented with the Explorer), other prefixes are reserved.",
+      "description": "the events the Runtime writes on every Run; RunEvent types with the prefix run., action. or stop. are these. The prefix unit. is the GUI unit's own (UnitRunEvent, A6); other prefixes are reserved.",
       "oneOf": [
         {
           "type": "object",
@@ -2768,11 +3120,7 @@
               "$ref": "#/$defs/Timestamp"
             },
             "type": {
-              "enum": [
-                "action.completed",
-                "action.failed",
-                "action.unknown"
-              ]
+              "const": "action.completed"
             },
             "data": {
               "type": "object",
@@ -2782,7 +3130,116 @@
               ],
               "properties": {
                 "receipt": {
-                  "$ref": "#/$defs/ActionReceipt"
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/ActionReceipt"
+                    },
+                    {
+                      "properties": {
+                        "execution": {
+                          "const": "completed"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "action.failed"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "receipt"
+              ],
+              "properties": {
+                "receipt": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/ActionReceipt"
+                    },
+                    {
+                      "properties": {
+                        "execution": {
+                          "const": "failed"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "action.unknown"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "receipt"
+              ],
+              "properties": {
+                "receipt": {
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/ActionReceipt"
+                    },
+                    {
+                      "properties": {
+                        "execution": {
+                          "const": "unknown"
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -3054,6 +3511,2190 @@
           "items": {
             "$ref": "service.schema.json#/$defs/GuiVerification"
           }
+        }
+      }
+    },
+    "Credential": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "token"
+      ],
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "pattern": "^(local:[0-9]+|app:[A-Za-z0-9._-]{1,64})$"
+        },
+        "token": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 200
+        }
+      }
+    },
+    "GrantRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capabilities"
+      ],
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 5,
+          "items": {
+            "enum": [
+              "observe",
+              "act",
+              "desktop.manage",
+              "run",
+              "unit.run"
+            ]
+          }
+        },
+        "desktops": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "description": "a Desktop id, or \"created\""
+          }
+        },
+        "apps": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]*$",
+            "description": "a bundle identifier"
+          }
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        }
+      }
+    },
+    "HubGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "capabilities",
+        "desktops",
+        "apps",
+        "expiresAt",
+        "revision",
+        "state"
+      ],
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 5,
+          "items": {
+            "enum": [
+              "observe",
+              "act",
+              "desktop.manage",
+              "run",
+              "unit.run"
+            ]
+          }
+        },
+        "desktops": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "description": "a Desktop id, or \"created\""
+          }
+        },
+        "apps": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]*$",
+            "description": "a bundle identifier"
+          }
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "state": {
+          "enum": [
+            "active",
+            "revoked"
+          ]
+        }
+      }
+    },
+    "HubClient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "agentName",
+        "state",
+        "registeredAt"
+      ],
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "agentName": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "callerFacts": {
+          "type": "object"
+        },
+        "codeIdentity": {
+          "$ref": "#/$defs/CodeIdentity"
+        },
+        "state": {
+          "enum": [
+            "active",
+            "revoked"
+          ]
+        },
+        "registeredAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "revokedAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "grant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HubGrant"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "HubPairing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingId",
+        "shortCode",
+        "state",
+        "expiresAt"
+      ],
+      "properties": {
+        "pairingId": {
+          "$ref": "#/$defs/Id"
+        },
+        "shortCode": {
+          "type": "string",
+          "pattern": "^[0-9]{6}$"
+        },
+        "agentName": {
+          "type": "string"
+        },
+        "publisher": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requested": {
+          "type": "object"
+        },
+        "callerFacts": {
+          "type": "object"
+        },
+        "codeIdentity": {
+          "$ref": "#/$defs/CodeIdentity"
+        },
+        "state": {
+          "enum": [
+            "requested",
+            "approved",
+            "denied",
+            "expired"
+          ]
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "clientId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "hub_pairing_start_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agentName",
+        "requested"
+      ],
+      "properties": {
+        "agentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u00AD\\u061C\\u200B-\\u200F\\u2028-\\u202E\\u2060-\\u206F\\uFEFF]+$",
+          "description": "one line of printable text, shown to the user as self-reported (no control, line-separator or bidi characters)"
+        },
+        "publisher": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u00AD\\u061C\\u200B-\\u200F\\u2028-\\u202E\\u2060-\\u206F\\uFEFF]+$",
+          "description": "one line of printable text, shown to the user as self-reported (no control, line-separator or bidi characters)"
+        },
+        "requested": {
+          "$ref": "#/$defs/GrantRequest"
+        }
+      }
+    },
+    "PairingStarted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingId",
+        "shortCode",
+        "state",
+        "expiresAt"
+      ],
+      "properties": {
+        "pairingId": {
+          "$ref": "#/$defs/Id"
+        },
+        "shortCode": {
+          "type": "string",
+          "pattern": "^[0-9]{6}$"
+        },
+        "state": {
+          "const": "requested"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "pairing_ref_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingId"
+      ],
+      "properties": {
+        "pairingId": {
+          "$ref": "#/$defs/Id"
+        }
+      }
+    },
+    "PairingStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingId",
+        "state",
+        "expiresAt"
+      ],
+      "properties": {
+        "pairingId": {
+          "$ref": "#/$defs/Id"
+        },
+        "state": {
+          "enum": [
+            "requested",
+            "approved",
+            "denied",
+            "expired"
+          ]
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "credential": {
+          "$ref": "#/$defs/Credential"
+        },
+        "grant": {
+          "$ref": "#/$defs/HubGrant"
+        }
+      }
+    },
+    "hub_pairing_approve_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingId",
+        "grant"
+      ],
+      "properties": {
+        "pairingId": {
+          "$ref": "#/$defs/Id"
+        },
+        "grant": {
+          "$ref": "#/$defs/GrantRequest"
+        }
+      }
+    },
+    "PairingApproved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "client",
+        "grant"
+      ],
+      "properties": {
+        "client": {
+          "$ref": "#/$defs/HubClient"
+        },
+        "grant": {
+          "$ref": "#/$defs/HubGrant"
+        }
+      }
+    },
+    "PairingDenied": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingId",
+        "state"
+      ],
+      "properties": {
+        "pairingId": {
+          "$ref": "#/$defs/Id"
+        },
+        "state": {
+          "const": "denied"
+        }
+      }
+    },
+    "HubClientList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clients",
+        "pairings"
+      ],
+      "properties": {
+        "clients": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HubClient"
+          }
+        },
+        "pairings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HubPairing"
+          }
+        }
+      }
+    },
+    "client_ref_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientId"
+      ],
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "pattern": "^app:[A-Za-z0-9._-]{1,64}$"
+        }
+      }
+    },
+    "hub_grants_set_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "capabilities"
+      ],
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "pattern": "^app:[A-Za-z0-9._-]{1,64}$"
+        },
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 5,
+          "items": {
+            "enum": [
+              "observe",
+              "act",
+              "desktop.manage",
+              "run",
+              "unit.run"
+            ]
+          }
+        },
+        "desktops": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "description": "a Desktop id, or \"created\""
+          }
+        },
+        "apps": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]*$",
+            "description": "a bundle identifier"
+          }
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        }
+      }
+    },
+    "HubGrantList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grants"
+      ],
+      "properties": {
+        "grants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HubGrant"
+          }
+        }
+      }
+    },
+    "WindowGrantWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowId",
+        "process",
+        "bundleId",
+        "appName"
+      ],
+      "properties": {
+        "windowId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "process": {
+          "$ref": "#/$defs/ProcessIdentity"
+        },
+        "bundleId": {
+          "type": "string"
+        },
+        "appName": {
+          "type": "string"
+        }
+      },
+      "description": "the window a grant covers: window ID together with the process launch (pid + start time) and its app; a window ID alone is never an identity"
+    },
+    "HubWindowGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowGrantId",
+        "clientId",
+        "desktopId",
+        "window",
+        "permissions",
+        "state",
+        "createdAt",
+        "expiresAt"
+      ],
+      "properties": {
+        "windowGrantId": {
+          "$ref": "#/$defs/Id"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "window": {
+          "$ref": "#/$defs/WindowGrantWindow"
+        },
+        "permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "enum": [
+              "observe",
+              "act",
+              "persist"
+            ]
+          }
+        },
+        "state": {
+          "enum": [
+            "active",
+            "revoked",
+            "ended"
+          ]
+        },
+        "endedReason": {
+          "type": "string",
+          "description": "why it no longer holds: window_closed, process_changed, app_changed, window_grant_revoked, client_revoked, grant_revoked, app_removed, desktop_removed, desktop_destroyed"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "confirmationId": {
+          "type": "string"
+        }
+      }
+    },
+    "HubWindowGrantList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowGrants"
+      ],
+      "properties": {
+        "windowGrants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HubWindowGrant"
+          }
+        }
+      }
+    },
+    "hub_windows_request_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "bundleId",
+        "permissions"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "bundleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]*$"
+        },
+        "windowId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "description": "omitted: the app's frontmost window where the Desktop can bind it; the user confirms the window shown"
+        },
+        "permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "enum": [
+              "observe",
+              "act",
+              "persist"
+            ]
+          }
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 604800
+        }
+      }
+    },
+    "hub_windows_list_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "includeEnded": {
+          "type": "boolean",
+          "description": "also revoked and ended grants; default active only"
+        }
+      }
+    },
+    "window_grant_ref_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "windowGrantId"
+      ],
+      "properties": {
+        "windowGrantId": {
+          "$ref": "#/$defs/Id"
+        }
+      }
+    },
+    "HubConnectionList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connections"
+      ],
+      "properties": {
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "connectionId",
+              "clientId",
+              "role",
+              "since"
+            ],
+            "properties": {
+              "connectionId": {
+                "type": "string"
+              },
+              "clientId": {
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "owner",
+                  "paired",
+                  "unpaired"
+                ]
+              },
+              "clientName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "callerFacts": {
+                "type": "object"
+              },
+              "since": {
+                "$ref": "#/$defs/Timestamp"
+              }
+            }
+          }
+        }
+      }
+    },
+    "CodeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "hardenedRuntime"
+      ],
+      "description": "what the Runtime read from the socket peer's kernel audit token (A4 S2), never from anything the client sends. verified: team-signed, hardened runtime, bound by its designated requirement; shared_interpreter: as verified but an interpreter whose every script shares it; same_user: nothing verifiable, only a process of this user; in_process: the host itself",
+      "properties": {
+        "level": {
+          "enum": [
+            "verified",
+            "shared_interpreter",
+            "same_user",
+            "in_process"
+          ]
+        },
+        "identifier": {
+          "type": "string"
+        },
+        "teamId": {
+          "type": "string"
+        },
+        "hardenedRuntime": {
+          "type": "boolean"
+        },
+        "requirement": {
+          "type": "string",
+          "description": "the designated requirement every later connection of this client must satisfy"
+        }
+      }
+    },
+    "HubDisplay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "displayId",
+        "name",
+        "frame",
+        "hiDPI",
+        "builtin",
+        "origin",
+        "attachable"
+      ],
+      "properties": {
+        "displayId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        },
+        "name": {
+          "type": "string",
+          "description": "the display's product name as the system reports it, or a neutral name when it reports none"
+        },
+        "frame": {
+          "$ref": "#/$defs/Rect"
+        },
+        "hiDPI": {
+          "type": "boolean"
+        },
+        "builtin": {
+          "type": "boolean"
+        },
+        "origin": {
+          "enum": [
+            "physical",
+            "virtual",
+            "unconfirmed"
+          ],
+          "description": "as the Runtime proved it: physical (built in, or an external display a hardware framebuffer vouches for), virtual (a display some process created), unconfirmed (not provably either; refused)"
+        },
+        "originDetail": {
+          "type": "string",
+          "description": "why it is virtual or unconfirmed"
+        },
+        "attachable": {
+          "type": "boolean",
+          "description": "origin physical and not attached yet"
+        },
+        "desktopId": {
+          "$ref": "#/$defs/Id",
+          "description": "the physical Desktop already attached to it, if any"
+        }
+      },
+      "description": "one of the user's active displays, for the owner to open to a paired client (owner-display-attach.md)"
+    },
+    "HubDisplayList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "displays"
+      ],
+      "properties": {
+        "displays": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HubDisplay"
+          }
+        }
+      }
+    },
+    "hub_displays_attach_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "displayId",
+        "clientId"
+      ],
+      "properties": {
+        "displayId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "a display hub.displays.list reports as physical"
+        },
+        "clientId": {
+          "type": "string",
+          "pattern": "^app:[A-Za-z0-9._-]{1,64}$",
+          "description": "the paired client whose grant gains the Desktop"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "the Desktop's name when it is created now; ignored for a display already attached"
+        }
+      }
+    },
+    "HubDisplayAttachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktop",
+        "grant",
+        "created"
+      ],
+      "properties": {
+        "desktop": {
+          "$ref": "#/$defs/Desktop"
+        },
+        "grant": {
+          "$ref": "#/$defs/HubGrant",
+          "description": "the client's grant as it is now, naming the Desktop"
+        },
+        "created": {
+          "type": "boolean",
+          "description": "false when the display was already attached and that Desktop was reused"
+        }
+      }
+    },
+    "hub_displays_detach_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "clientId": {
+          "type": "string",
+          "pattern": "^app:[A-Za-z0-9._-]{1,64}$",
+          "description": "only this client loses the Desktop; omitted: every client does and the Desktop is destroyed"
+        }
+      }
+    },
+    "HubDisplayDetachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "destroyed",
+        "grants"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "destroyed": {
+          "type": "boolean"
+        },
+        "grants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HubGrant"
+          },
+          "description": "the grants the Desktop was removed from, as they are now"
+        }
+      }
+    },
+    "desktop_stop_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        }
+      }
+    },
+    "desktop_takeover_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        }
+      }
+    },
+    "desktop_handback_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        }
+      }
+    },
+    "DesktopControl": {
+      "description": "who controls the Desktop's input, derived from its lease, its admission and its last Run (docs/plan/03 §3.4); a paired client sees controllerRunId, clientId and clientName only for its own Run",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "since",
+        "actionCount"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "creating",
+            "ready",
+            "running",
+            "manual",
+            "stopping",
+            "stopped",
+            "disconnected",
+            "unknown",
+            "error"
+          ],
+          "description": "running: a Run holds the lease; manual: the user's takeover Run holds it; stopping: the Run holding it stops; stopped: desktop.stop, global stop, or the last Run ended by a stop, until a new Run or desktop.handback; disconnected: the last Run lost its control connection; unknown: the last Run has an unknown action; creating and error are reserved"
+        },
+        "controllerRunId": {
+          "$ref": "#/$defs/Id"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "clientName": {
+          "type": "string"
+        },
+        "since": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "actionCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "RunStopState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "phase",
+        "quiescence",
+        "outcome"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "#/$defs/Id"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "quiescence": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "DesktopStopReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "accepted",
+        "run",
+        "control"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "accepted": {
+          "const": true
+        },
+        "run": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunStopState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "the Run that held the Desktop, as stopped: phase stopping and quiescence pending while an action of it is in flight"
+        },
+        "control": {
+          "$ref": "#/$defs/DesktopControl"
+        }
+      }
+    },
+    "DesktopTakeover": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "run",
+        "stopped",
+        "control"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "run": {
+          "$ref": "#/$defs/Run"
+        },
+        "stopped": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunStopState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "the agent's Run the takeover stopped, if one held the Desktop"
+        },
+        "control": {
+          "$ref": "#/$defs/DesktopControl"
+        }
+      }
+    },
+    "DesktopHandback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "handedBack",
+        "endedRunId",
+        "observationsCleared",
+        "control"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "handedBack": {
+          "type": "boolean"
+        },
+        "endedRunId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "observationsCleared": {
+          "type": "boolean"
+        },
+        "control": {
+          "$ref": "#/$defs/DesktopControl"
+        }
+      }
+    },
+    "observe_region_v1_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "elements": {
+          "type": "boolean",
+          "description": "default true; needs a bound window"
+        },
+        "region": {
+          "$ref": "#/$defs/Rect"
+        },
+        "maxWidth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "region"
+          ]
+        },
+        {
+          "required": [
+            "maxWidth"
+          ]
+        }
+      ]
+    },
+    "observe_subscribe_v1_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "maxWidth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1920
+        },
+        "region": {
+          "$ref": "#/$defs/Rect"
+        }
+      }
+    },
+    "ObservationSubscription": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subscriptionId",
+        "subscribed",
+        "fps",
+        "maxWidth",
+        "version"
+      ],
+      "properties": {
+        "subscriptionId": {
+          "$ref": "#/$defs/Id"
+        },
+        "subscribed": {
+          "const": true
+        },
+        "fps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "maxWidth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1920
+        },
+        "version": {
+          "const": 1
+        }
+      }
+    },
+    "ObservationSubscriptionEnd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subscribed"
+      ],
+      "properties": {
+        "subscribed": {
+          "const": false
+        }
+      }
+    },
+    "ObservationFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "apiVersion",
+        "subscriptionId",
+        "sequence",
+        "type",
+        "status"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/$defs/ApiVersion"
+        },
+        "subscriptionId": {
+          "$ref": "#/$defs/Id"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "type": {
+          "const": "observation.frame"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "paused"
+          ]
+        },
+        "frame": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "image",
+            "screen",
+            "target",
+            "capturedAt"
+          ],
+          "properties": {
+            "image": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ImageArtifact"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "screen": {
+              "$ref": "#/$defs/ScreenRef"
+            },
+            "target": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ObservedTarget"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "capturedAt": {
+              "$ref": "#/$defs/Timestamp"
+            }
+          }
+        },
+        "error": {
+          "$ref": "#/$defs/Error"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ready"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "frame"
+            ],
+            "not": {
+              "required": [
+                "error"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "paused"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "error"
+            ],
+            "not": {
+              "required": [
+                "frame"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "BindingStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "state",
+        "reason"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "state": {
+          "enum": [
+            "unbound",
+            "valid",
+            "blocked",
+            "invalid",
+            "needs_authorization"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        }
+      }
+    },
+    "RecoveredBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "binding",
+        "windowGrant"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "binding": {
+          "$ref": "#/$defs/Binding"
+        },
+        "windowGrant": {
+          "$ref": "#/$defs/HubWindowGrant"
+        }
+      }
+    },
+    "UnitRunEvent": {
+      "description": "the GUI unit's own events on a kind unit Run (A6, F40-03), beside the PlatformRunEvent types. data holds ids, enums, codes and numbers only: never a screenshot, typed text, a window title, a goal or parameter value, a model reply or a secret. Lifecycle (phase, outcome) stays in the run.* events.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.observation"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "observationId"
+              ],
+              "properties": {
+                "observationId": {
+                  "$ref": "#/$defs/Id"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.progress"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "stepIndex",
+                "stepsLeft",
+                "attemptsLeft",
+                "secondsLeft"
+              ],
+              "properties": {
+                "stepIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "stepsLeft": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "attemptsLeft": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "secondsLeft": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.inference.attempt"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "stepIndex",
+                "attempts",
+                "state",
+                "discarded",
+                "errorCode"
+              ],
+              "properties": {
+                "stepIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "inferenceAttemptId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "state": {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                "discarded": {
+                  "type": "boolean"
+                },
+                "errorCode": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "attempts": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "model calls this inference made (a transient failure moved to the next candidate counts each); inferenceAttemptId names the last, and is absent when the calls failed with no receipt"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.step.proposed"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "stepIndex",
+                "proposalId",
+                "inferenceAttemptId",
+                "kind"
+              ],
+              "properties": {
+                "stepIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "proposalId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "inferenceAttemptId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "kind": {
+                  "enum": [
+                    "action",
+                    "wait",
+                    "finish",
+                    "needs_user"
+                  ]
+                },
+                "actionKind": {
+                  "enum": [
+                    "click",
+                    "type",
+                    "key",
+                    "scroll"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.step.rejected"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "stepIndex",
+                "reason"
+              ],
+              "properties": {
+                "stepIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reason": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.action"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "stepIndex",
+                "actionId",
+                "proposalId",
+                "requestId",
+                "deliveryState"
+              ],
+              "properties": {
+                "stepIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "actionId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "proposalId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "requestId": {
+                  "$ref": "#/$defs/Id"
+                },
+                "deliveryState": {
+                  "enum": [
+                    "not_sent",
+                    "submitted",
+                    "confirmed",
+                    "unknown",
+                    "rejected"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.recovery"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "stepIndex",
+                "kind",
+                "count"
+              ],
+              "properties": {
+                "stepIndex": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "kind": {
+                  "enum": [
+                    "reobserve_after_empty_reply",
+                    "repeated_action",
+                    "no_progress",
+                    "state_loop"
+                  ],
+                  "description": "reobserve_after_empty_reply: a step's empty model reply (Kevin 2026-10-08). The others (X1-2): a stall took its one bounded recovery — a new observation of the bound target, verified; nothing sent is repeated. A further stall ends the Run with closingReason no_progress (repeated_action, no_progress) or loop_detected (state_loop)."
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.verification"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "verifierId",
+                "observationId",
+                "checkedAt"
+              ],
+              "properties": {
+                "status": {
+                  "enum": [
+                    "matched",
+                    "contradicted",
+                    "inconclusive"
+                  ]
+                },
+                "verifierId": {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                "observationId": {
+                  "$ref": "#/$defs/Id"
+                },
+                "checkedAt": {
+                  "$ref": "#/$defs/Timestamp"
+                },
+                "reason": {
+                  "enum": [
+                    "elements_partial",
+                    "elements_unavailable",
+                    "ambiguous",
+                    "target_missing",
+                    "value_unreadable"
+                  ],
+                  "description": "why an inconclusive verdict could not decide; absent otherwise"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runId",
+            "sequence",
+            "at",
+            "type",
+            "data"
+          ],
+          "properties": {
+            "runId": {
+              "$ref": "#/$defs/Id"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "at": {
+              "$ref": "#/$defs/Timestamp"
+            },
+            "type": {
+              "const": "unit.needs_input"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reason"
+              ],
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "desktop_closePlan_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        }
+      }
+    },
+    "app_quit_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "pid"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "desktop_resize_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 320,
+          "maximum": 16384
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 16384
+        }
+      }
+    },
+    "ClosePlanProcess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "process",
+        "appName",
+        "bundleId"
+      ],
+      "properties": {
+        "process": {
+          "$ref": "#/$defs/ProcessIdentity"
+        },
+        "appName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundleId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "not_launched_here",
+            "physical_desktop"
+          ]
+        }
+      }
+    },
+    "DesktopClosePlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "kind",
+        "display",
+        "canClose",
+        "blockers",
+        "quit",
+        "keep"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "kind": {
+          "enum": [
+            "virtual",
+            "physical"
+          ]
+        },
+        "display": {
+          "enum": [
+            "destroyed",
+            "kept"
+          ],
+          "description": "a virtual Desktop's display is destroyed; a physical one is the user's and kept"
+        },
+        "canClose": {
+          "type": "boolean"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "run",
+                  "sessions"
+                ]
+              },
+              "runId": {
+                "$ref": "#/$defs/Id"
+              },
+              "origin": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "quit": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ClosePlanProcess"
+          },
+          "description": "processes destroy asks to quit: launched on this Desktop and still running"
+        },
+        "keep": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ClosePlanProcess"
+          },
+          "description": "processes with a window there that destroy leaves running"
+        }
+      }
+    },
+    "AppQuitResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "desktopId",
+        "process",
+        "quitRequested",
+        "exited"
+      ],
+      "properties": {
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "process": {
+          "$ref": "#/$defs/ProcessIdentity"
+        },
+        "quitRequested": {
+          "type": "boolean"
+        },
+        "exited": {
+          "type": "boolean",
+          "description": "the process is gone; false: asked to quit, not proof that it will"
+        }
+      }
+    },
+    "request_list_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "enum": [
+            "accepted",
+            "completed",
+            "failed",
+            "unknown"
+          ]
+        },
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "clientId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "owner only: one caller's records; ignored for a paired client, which sees only its own"
+        },
+        "since": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "RequestList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requests",
+        "next"
+      ],
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RequestRecord"
+          }
+        },
+        "next": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "request_export_params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "enum": [
+            "accepted",
+            "completed",
+            "failed",
+            "unknown"
+          ]
+        },
+        "desktopId": {
+          "$ref": "#/$defs/Id"
+        },
+        "clientId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "owner only: one caller's records; ignored for a paired client, which sees only its own"
+        },
+        "since": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    },
+    "RequestExport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact",
+        "count",
+        "truncated"
+      ],
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/Artifact"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "more records matched than one export holds (10000): narrow the filter"
         }
       }
     }

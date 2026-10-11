@@ -57,8 +57,8 @@ test('driver: the control connection drops with a request in flight → connecti
 
   // The Run stream saw the platform end the Run and then the server closed it; the iterator ended, it did not throw.
   await pump;
-  assert.deepEqual(frames, ['run.started', 'action.receipt', 'run.ended']);
-  assert.equal(stream.cursor, 3);
+  assert.deepEqual(frames, ['run.started', 'action.accepted', 'action.dispatched', 'action.completed', 'run.quiescent', 'run.ended']);
+  assert.equal(stream.cursor, 6);
 });
 
 test('driver: deadline_exceeded is transport/notSent=false and the driver keeps the socket (the app closes it; see the connector)', async (t) => {
@@ -87,7 +87,7 @@ test('fake runtime: a connection that ends takes its connection_scoped Run with 
   assert.equal(run.quiescence, 'confirmed');
   assert.equal(run.receipts.length, 1, 'the action went out before the socket died');
   assert.equal(run.unknownActions, 0, 'the platform knows it completed; only the client does not');
-  assert.deepEqual(run.events.map((e) => e.type), ['run.started', 'action.receipt', 'run.ended']);
+  assert.deepEqual(run.events.map((e) => e.type), ['run.started', 'action.accepted', 'action.dispatched', 'action.completed', 'run.quiescent', 'run.ended']);
   // A fresh connection asks by requestId instead of re-sending.
   const second = createDriver({ endpoint: fake.endpoint, client: REHEARSAL_CLIENT });
   t.after(() => second.close());
@@ -118,7 +118,7 @@ test('fake runtime (quiescenceOnDrop: pending): the drop closes input at once (s
   assert.equal(ended.phase, 'ended');
   assert.equal(ended.outcome, 'cancelled');
   assert.equal(ended.quiescence, 'confirmed');
-  assert.deepEqual(run.events.map((e) => e.type), ['run.started', 'run.stopping', 'run.ended']);
+  assert.deepEqual(run.events.map((e) => e.type), ['run.started', 'stop.accepted', 'run.quiescent', 'run.ended']);
 });
 
 // ---------------------------------------------------------------- packages/app over the real driver + Fake Runtime
@@ -130,7 +130,7 @@ const detailPage = (): PageFacts => pageFacts({
 const acceptStack = (): PageFacts[] => [newFriendsPage([requestRow(NAME, 'pending')]), detailPage(), detailPage(), newFriendsPage([requestRow(NAME, 'added')])];
 
 async function pairedStack(t: TestContext, fake: FakeRuntimeOptions = {}): Promise<FakeStack> {
-  return startFakeStack(t, { fake: { principal: { clientId: 'app:wechat-agent', role: 'paired' }, ...fake }, facts: acceptStack() });
+  return startFakeStack(t, { fake, facts: acceptStack() });
 }
 
 test('app T08 over the wire: the socket dies after the dangerous act → attempt unknown with the persisted requestId, gate quiescence_unconfirmed, task stopping; reconnect only looks (run.show), settles needs_reconciliation; reconcile asks request.show with the same requestId; nothing re-sent', async (t) => {
