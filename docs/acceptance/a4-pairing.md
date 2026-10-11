@@ -7,13 +7,13 @@
 - 窗口级授权；
 - 第四阶段真机验收。
 
-通用 Runtime 契约没有改动。契约快照只是按原样同步到 `bb02b59`。
+通用 Runtime 契约没有改动。契约快照只是按原样同步：最初是 `bb02b59`，2026-10-11 按 Kevin 的裁决同步到 agentdesktop main `7cbbdec`（见下一节）。
 
 ## 做了什么
 
 | 部分 | 内容 |
 | --- | --- |
-| 契约快照 | `contracts/agentdesktop-runtime-v1` 同步到 `bb02b59`，SHA256SUMS 已更新。driver 只允许 `hub.pairing.start` / `hub.pairing.status`；其他 `hub.*` 和 `runtime.enableInput` 属于所有者，driver 在本地直接拒绝（`schema.ts`）。 |
+| 契约快照 | `contracts/agentdesktop-runtime-v1` 同步到 `7cbbdec`（原为 `bb02b59`），SHA256SUMS 已更新。driver 按名单调用（`CALLED_METHODS`，`schema.ts`）：`hub.*` 里只有 `hub.pairing.start` / `hub.pairing.status`；其他 `hub.*`（含 `hub.displays.*`、`hub.windows.*`）、`runtime.enableInput` 和平台新增但本应用未采用的方法，driver 在本地直接拒绝。 |
 | driver | `connect({ credential })`：凭据只放在 `runtime.handshake` 里（控制连接和每条事件订阅连接都带），其他请求一律不带。新增 `startPairing()`、`pairingStatus()`。 |
 | 凭据存储 | `CredentialStore` 端口有两种实现：<br>• `MemoryCredentialStore`：默认，每次启动重新配对；<br>• `FileCredentialStore`：文件 0600、目录 0700；其他用户能读或文件格式不对时，拒绝使用。<br>测试只用这两种，不写登录钥匙串。签名 App 改用钥匙串，要等外壳接线和 S4 一起做（见“未做”）。 |
 | 连接器 | 状态分为：`unpaired` 未配对、`pairing` 等待确认、`ready` 已配对、`no_access` 授权不可用、`revoked` 已撤销。详见下一节。 |
@@ -56,6 +56,17 @@
 | apps | `["com.tencent.xinWeChat"]` | 只申请微信 |
 | 期限 | 1 天 | 到期后由所有者续期 |
 
+## 2026-10-11：同步到 agentdesktop main `7cbbdec`
+
+Kevin 2026-10-11 裁决：#14 保持 Draft；先把契约快照同步到最新 main、修好 CI，再做 approve / deny 两条 Touch ID 验收和独立审核；现在不授权合并。
+
+- **契约**：同步到 `7cbbdec`。差异与处理见 `contracts/agentdesktop-runtime-v1/SOURCE.md`。要点：
+  - 新增的 `hub.windows.*`（#205 窗口级授权）与 `hub.displays.*`（#216 owner 挂接显示器）本应用不调用：前者留到第四阶段，后者只属于所有者。
+  - `client_revoked` / `grant_missing` / `grant_expired` 落在 Runtime 已执行的写操作上时 `notSent: false`、`writeOutcome: "completed"`。本应用按 `notSent` 处理：进入待核对（`needs_reconciliation`），不重发，也不当成未配对（新增测试）。
+  - Fake Runtime 的事件改成 runtime/1 事件目录（`PlatformRunEvent`）。
+- **CI**：此前失败的 2 个 OCR 用例（`new-friends-mixed`、T11）原因是 CI 机器上的 Vision 把截断省略号读成 `⋯`（U+22EF），本机读成 `…`（U+2026），识别模块只认后者。现在 OCR 入口和 `norm()` 把 `⋯`、`‥` 统一成 `…`，并加了不依赖 OCR 的单元测试。这是识别模块的修复，和配对无关；放在本 PR 是因为 Kevin 要求先让 #14 的 CI 变绿，main `c499b40` 上同样失败。
+- **验收脚本**：`scripts/pairing-acceptance.sh` 现在要求测试副本由包含 `7cbbdec` 的 main 构建（能从本地 agentdesktop 仓库判断时会检查，不满足就拒绝运行）。
+
 ## 硬约束是怎么落实的
 
 | 要求 | 落实方式 | 测试 |
@@ -85,7 +96,7 @@
 
 所有回合都在测试副本上进行：不碰正式端点，不碰真实微信，不发任何消息。Touch ID 由 Kevin 本人操作。
 
-前提：`APP` 指向一个用 agentdesktop main 构建的 `Agent Desktop.app`，例如 `scripts/bundle-app.sh` 的产物。
+前提：`APP` 指向一个用 agentdesktop main（`7cbbdec` 或更新）构建的 `Agent Desktop.app`，即 agentdesktop 的 `scripts/bundle-app.sh` 产物 `build/Agent Desktop.app`。
 
 1. **批准、自我撤销**：
    ```
@@ -106,7 +117,7 @@
 
 ## 未做 / 仍受阻
 
-- **第四阶段真机验收仍受阻**，前提没有变：#143（等窗口级授权）、CR01 验收、授权的测试账号。配对完成不会开放任何微信窗口。
+- **第四阶段真机验收仍受阻**：物理 Desktop 的机制（#205、#143、#216）已在 agentdesktop main 上，但本应用还没接窗口授权（`hub.windows.*`），也还缺 CR01 验收和授权的测试账号。配对完成不会开放任何微信窗口。
 - **签名 App 的钥匙串凭据存储**：Electron 主进程目前仍接 Fake 服务（真实服务的接线未做）。接线时需要提供一个钥匙串实现的 `CredentialStore`。这要和 S4 一起做：Developer ID 签名、Data Protection 钥匙串、access group。
 - **代码身份等级**：Electron App 在 Runtime 看来是 `shared_interpreter`（#137 文档），确认窗口会如实标出。要等 S4 签名才可能更进一步。
 - **断连感知**：本应用在下一次调用失败时才发现控制连接被切断（与原有 T34 设计一致）。撤销本身由 Runtime 立即执行，不依赖本应用及时察觉。

@@ -11,8 +11,10 @@
 #   APP=... scripts/pairing-acceptance.sh approve   # 批准 + Touch ID, then 批准 + Touch ID again (self-revocation)
 #   APP=... scripts/pairing-acceptance.sh deny      # 拒绝
 #
-# APP must be a bundle built from agentdesktop main (bb02b59 or later). Evidence
-# goes to $OUT (default ./pairing-acceptance-out); the token is never written.
+# APP must be a bundle built from agentdesktop main 7cbbdec or later (the
+# contract snapshot this app carries); the script refuses an older build when
+# the bundle records its source. Evidence goes to $OUT (default
+# ./pairing-acceptance-out); the token is never written.
 set -u
 ROUND="${1:-}"
 case "$ROUND" in probe|approve|deny) ;; *) echo "usage: APP=<Agent Desktop.app> $0 probe|approve|deny"; exit 2 ;; esac
@@ -32,7 +34,17 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 rm -rf "$DIR"; mkdir -p "$DIR" "$OUT"; chmod 700 "$DIR"
-echo "== AgentDesktop test copy: $(sed -n 's/.*"source": "\([0-9a-f]*\)".*/\1/p' "$APP/Contents/Resources/build.json" | head -1)"
+SOURCE="$(sed -n 's/.*"source": "\([0-9a-f]*\)".*/\1/p' "$APP/Contents/Resources/build.json" 2>/dev/null | head -1)"
+echo "== AgentDesktop test copy: ${SOURCE:-unknown source}"
+# The snapshot in contracts/agentdesktop-runtime-v1 is agentdesktop 7cbbdec; an
+# older Runtime lacks what it describes. Checked when a local agentdesktop clone
+# can answer; otherwise the source is printed for the record.
+BASE=7cbbdec878c14876c39ccf648fa880ad1f692a88
+ADREPO="${AGENTDESKTOP_REPO:-$HOME/orca/agentdesktop}"
+if [ -n "$SOURCE" ] && git -C "$ADREPO" cat-file -e "$SOURCE^{commit}" 2>/dev/null; then
+    git -C "$ADREPO" merge-base --is-ancestor "$BASE" "$SOURCE" \
+        || { echo "the test copy is built from $SOURCE, which does not contain agentdesktop $BASE; rebuild it from main"; exit 2; }
+fi
 AGENTDESKTOP_SOCKET="$DIR/side.sock" "$APP/Contents/MacOS/Agent Desktop" > "$DIR/host.log" 2>&1 &
 HOST=$!
 i=0; while [ ! -S "$EP" ] && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
