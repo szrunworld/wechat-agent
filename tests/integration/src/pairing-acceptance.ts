@@ -7,7 +7,7 @@
 //   revoke-self  the stored client gives up its own access (A4 R1: the person confirms with Touch ID)
 //
 //   WECHAT_AGENT_ENDPOINT=/tmp/adt-wxpair/side.runtime.sock WECHAT_AGENT_CREDENTIAL=/tmp/adt-wxpair/credential.json \
-//     node_modules/.bin/tsx tests/integration/src/pairing-acceptance.ts <mode> --out <file.json>
+//     node_modules/.bin/tsx tests/integration/src/pairing-acceptance.ts <mode> [--expect paired|denied|revoked] --out <file.json>
 //
 // Nothing here reads WeChat, binds a window, observes the screen or sends input:
 // no task is created, patrol and the baseline read are off, and the only calls
@@ -19,6 +19,7 @@ import path from 'node:path';
 import { createApplication, FileCredentialStore, MemorySink, resolveConfig } from '@wechat-agent/app';
 import { createDriver, RpcConnection, resolveEndpoint, resultProblems } from '@wechat-agent/driver';
 import { DriverError, RUNTIME_API_VERSION, type AppSnapshot, type HandlerRegistry } from '@wechat-agent/ports';
+import { expectedPairingResult } from './pairing-expectations.ts';
 import { FakeRecognizer, InMemoryLedger } from '@wechat-agent/ports/fakes';
 
 const CLIENT = { name: 'wechat-agent', version: '0.1.0' };
@@ -101,7 +102,7 @@ async function probe(endpoint: string, checks: Check[]): Promise<void> {
   checks.push({ id: 'P9', title: 'app core unpaired: state unpaired, every feature pairing_missing', result: snap.connection.state === 'unpaired' && allOff ? 'passed' : 'failed', detail: connectionOf(snap) });
 }
 
-async function runApp(endpoint: string, credentialFile: string, mode: 'pair' | 'check', checks: Check[]): Promise<void> {
+async function runApp(endpoint: string, credentialFile: string, mode: 'pair' | 'check', expected: 'paired' | 'denied' | 'revoked', checks: Check[]): Promise<void> {
   const dataDir = path.join(path.dirname(credentialFile), 'app-data');
   const store = new FileCredentialStore(credentialFile);
   const app = createApplication({
@@ -114,7 +115,11 @@ async function runApp(endpoint: string, credentialFile: string, mode: 'pair' | '
   if (mode === 'check') {
     const snap = await snapshot();
     console.log(`state: ${snap.connection.state}  pairing: ${snap.connection.pairing.state}${snap.connection.pairing.refusal ? `  (${snap.connection.pairing.refusal.message})` : ''}`);
-    checks.push({ id: 'C1', title: 'app core with the stored credential', result: 'info', detail: connectionOf(snap) });
+    checks.push({ id: 'C1', title: `reconnected: expected ${expected}`, result: expectedPairingResult(snap.connection.state, snap.connection.pairing.state, expected), detail: connectionOf(snap) });
+    if (expected === 'revoked') {
+      const again = await app.service.call('connection.check', {});
+      checks.push({ id: 'C2', title: 'revoked: credential cleared and retry remains revoked', result: !(await store.load()) && again.state === 'revoked' ? 'passed' : 'failed' });
+    }
     await app.stop();
     return;
   }
@@ -139,7 +144,7 @@ async function runApp(endpoint: string, credentialFile: string, mode: 'pair' | '
     snap = await snapshot();
   }
   console.log(`result: ${snap.connection.state} / ${snap.connection.pairing.state}`);
-  checks.push({ id: 'A2', title: 'the person answered: app state afterwards', result: 'info', detail: connectionOf(snap) });
+  checks.push({ id: 'A2', title: `the person answered: expected ${expected}`, result: expectedPairingResult(snap.connection.state, snap.connection.pairing.state, expected), detail: connectionOf(snap) });
   if (snap.connection.pairing.state === 'paired') {
     const stored = await store.load();
     checks.push({ id: 'A3', title: 'credential stored (0600 file), principal paired', result: stored?.clientId === snap.connection.principal?.clientId && snap.connection.principal?.role === 'paired' ? 'passed' : 'failed', detail: { clientId: stored?.clientId, codeIdentityLevel: snap.connection.pairing.codeIdentityLevel, grant: snap.connection.pairing.grant } });
@@ -149,6 +154,7 @@ async function runApp(endpoint: string, credentialFile: string, mode: 'pair' | '
   if (snap.connection.pairing.state === 'denied') {
     let blocked = false;
     try { await app.service.call('pairing.start', {}); } catch { blocked = true; }
+    checks.push({ id: 'A6', title: 'denied: no credential was stored', result: await store.load() === null ? 'passed' : 'failed' });
     checks.push({ id: 'A5', title: 'denied → the app does not ask again within the minute', result: blocked ? 'passed' : 'failed', detail: { retryAfter: snap.connection.pairing.retryAfter } });
   }
   await app.stop();
@@ -165,7 +171,7 @@ async function revokeSelf(endpoint: string, credentialFile: string, checks: Chec
   if (!hello.ok) throw new Error(`handshake refused: ${hello.error.code}`);
   console.log(`\n  ${stored.clientId} 申请撤销自己的授权：请在 AgentDesktop 的确认窗口批准并用 Touch ID 确认。\n`);
   const revoked = await call('hub.clients.revoke', { clientId: stored.clientId }, 150_000);
-  checks.push({ id: 'R1', title: 'self-revocation answered', result: revoked.ok ? 'passed' : 'info', detail: revoked.ok ? { state: (revoked.data as { state?: string }).state } : revoked.error });
+  checks.push({ id: 'R1', title: 'self-revocation answered', result: revoked.ok && (revoked.data as { state?: string }).state === 'revoked' ? 'passed' : 'failed', detail: revoked.ok ? { state: (revoked.data as { state?: string }).state } : revoked.error });
   conn.destroy();
 }
 
@@ -174,7 +180,7 @@ async function main(): Promise<number> {
   const args = process.argv.slice(3);
   const out = args.includes('--out') ? args[args.indexOf('--out') + 1] : undefined;
   if (!['probe', 'pair', 'check', 'revoke-self'].includes(mode ?? '')) {
-    console.error('usage: pairing-acceptance.ts probe|pair|check|revoke-self [--out file.json]');
+    console.error('usage: pairing-acceptance.ts probe|pair|check|revoke-self [--expect paired|denied|revoked] [--out file.json]');
     return 2;
   }
   const endpoint = resolveEndpoint(env('WECHAT_AGENT_ENDPOINT'));
@@ -182,10 +188,15 @@ async function main(): Promise<number> {
     console.error(`refusing the product endpoint ${endpoint}: acceptance runs only against a test copy`);
     return 2;
   }
+  const expected = args.includes('--expect') ? args[args.indexOf('--expect') + 1] : undefined;
+  if ((mode === 'pair' && !['paired', 'denied'].includes(expected ?? '')) || (mode === 'check' && !['paired', 'revoked'].includes(expected ?? ''))) {
+    console.error('pair/check require --expect paired|denied|revoked (matching the round)');
+    return 2;
+  }
   const checks: Check[] = [];
   if (mode === 'probe') await probe(endpoint, checks);
   else if (mode === 'revoke-self') await revokeSelf(endpoint, env('WECHAT_AGENT_CREDENTIAL'), checks);
-  else await runApp(endpoint, env('WECHAT_AGENT_CREDENTIAL'), mode as 'pair' | 'check', checks);
+  else await runApp(endpoint, env('WECHAT_AGENT_CREDENTIAL'), mode as 'pair' | 'check', expected as 'paired' | 'denied' | 'revoked', checks);
   for (const c of checks) console.log(`${c.result.toUpperCase().padEnd(6)} ${c.id} ${c.title}`);
   const record = { probe: `wechat-agent pairing-acceptance ${mode}`, at: new Date().toISOString(), endpoint, checks };
   if (out) writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`);

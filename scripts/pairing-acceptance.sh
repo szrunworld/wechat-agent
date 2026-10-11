@@ -16,6 +16,7 @@
 # the bundle records its source. Evidence goes to $OUT (default
 # ./pairing-acceptance-out); the token is never written.
 set -u
+. "$(dirname "$0")/lib/process-identity.sh"
 ROUND="${1:-}"
 case "$ROUND" in probe|approve|deny) ;; *) echo "usage: APP=<Agent Desktop.app> $0 probe|approve|deny"; exit 2 ;; esac
 [ -n "${APP:-}" ] && [ -x "$APP/Contents/MacOS/Agent Desktop" ] || { echo "APP must point at an Agent Desktop.app built from agentdesktop main"; exit 2; }
@@ -28,8 +29,15 @@ RUN="$ROOT/tests/integration/src/pairing-acceptance.ts"
 fails=0
 
 cleanup() {
-    [ -n "${HOST:-}" ] && kill "$HOST" 2>/dev/null && wait "$HOST" 2>/dev/null
+    rc=$?
+    if [ -n "${HOST:-}" ]; then
+        proc_stop "$HOST" "${HOST_ID:-}" || rc=3
+        leftover=$(proc_left "$HOST" "${HOST_ID:-}" "the test Agent Desktop")
+        if [ -n "$leftover" ]; then echo "$leftover"; rc=3; fi
+    fi
     rm -rf "$DIR"
+    trap - EXIT INT TERM
+    exit "$rc"
 }
 trap cleanup EXIT INT TERM
 
@@ -47,6 +55,7 @@ if [ -n "$SOURCE" ] && git -C "$ADREPO" cat-file -e "$SOURCE^{commit}" 2>/dev/nu
 fi
 AGENTDESKTOP_SOCKET="$DIR/side.sock" "$APP/Contents/MacOS/Agent Desktop" > "$DIR/host.log" 2>&1 &
 HOST=$!
+HOST_ID=$(proc_record "$HOST" "$APP/Contents/MacOS/Agent Desktop") || { echo "cannot record test host identity"; exit 1; }
 i=0; while [ ! -S "$EP" ] && [ $i -lt 60 ]; do sleep 0.5; i=$((i + 1)); done
 [ -S "$EP" ] || { echo "the test copy did not start (see $DIR/host.log)"; exit 1; }
 echo "   listening at $EP"
@@ -54,7 +63,7 @@ echo "   listening at $EP"
 export WECHAT_AGENT_ENDPOINT="$EP" WECHAT_AGENT_CREDENTIAL="$DIR/wechat-agent/credential.json"
 step() { # mode label
     echo "== $2"
-    "$TSX" "$RUN" "$1" --out "$OUT/$ROUND-$1-$(date +%H%M%S).json" || fails=$((fails + 1))
+    "$TSX" "$RUN" "$1" ${3:+--expect "$3"} --out "$OUT/$ROUND-$1-$(date +%H%M%S).json" || fails=$((fails + 1))
 }
 
 case "$ROUND" in
@@ -62,12 +71,12 @@ case "$ROUND" in
         step probe "unpaired wire against the real Runtime (no person needed)" ;;
     approve)
         step probe "unpaired wire"
-        step pair "pairing: compare the code, press 批准…, then Touch ID"
-        step check "paired: reconnect with the stored credential"
+        step pair "pairing: compare the code, press 批准…, then Touch ID" paired
+        step check "paired: reconnect with the stored credential" paired
         step revoke-self "self-revocation: press 批准…, then Touch ID"
-        step check "after revocation: expect revoked, credential dropped, no reconnect" ;;
+        step check "after revocation: expect revoked, credential dropped, no reconnect" revoked ;;
     deny)
-        step pair "pairing: press 拒绝" ;;
+        step pair "pairing: press 拒绝" denied ;;
 esac
 
 echo "== audit (A4 decisions of this test copy)"
