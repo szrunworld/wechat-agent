@@ -1,0 +1,161 @@
+{
+  "probe": "wechat-agent pairing-acceptance probe",
+  "at": "2026-10-11T02:55:52.061Z",
+  "endpoint": "/tmp/adt-wxpair/side.runtime.sock",
+  "checks": [
+    {
+      "id": "P1",
+      "title": "handshake without a credential: principal unpaired",
+      "result": "passed",
+      "detail": {
+        "clientId": "unpaired:conn_76eb618399af4d8d",
+        "role": "unpaired",
+        "connectionId": "conn_76eb618399af4d8d",
+        "codeIdentityLevel": "shared_interpreter"
+      }
+    },
+    {
+      "id": "P2",
+      "title": "handshake result validates against the bb02b59 snapshot",
+      "result": "passed",
+      "detail": []
+    },
+    {
+      "id": "P3",
+      "title": "capabilities (open to unpaired) list the methods the app needs",
+      "result": "passed",
+      "detail": {
+        "missing": []
+      }
+    },
+    {
+      "id": "P4",
+      "title": "desktop.list unpaired → pairing_required, not sent",
+      "result": "passed",
+      "detail": {
+        "code": "pairing_required",
+        "phase": "request",
+        "notSent": true
+      }
+    },
+    {
+      "id": "P5",
+      "title": "runtime.status unpaired → pairing_required",
+      "result": "passed",
+      "detail": {
+        "code": "pairing_required",
+        "phase": "request",
+        "notSent": true
+      }
+    },
+    {
+      "id": "P6",
+      "title": "window.list unpaired → pairing_required",
+      "result": "passed",
+      "detail": {
+        "code": "pairing_required",
+        "phase": "request",
+        "notSent": true
+      }
+    },
+    {
+      "id": "P7",
+      "title": "hub.pairing.status of someone else / nothing → not_found",
+      "result": "passed",
+      "detail": {
+        "code": "not_found",
+        "phase": "handler"
+      }
+    },
+    {
+      "id": "P8",
+      "title": "a credential that proves nothing → permission_denied bad_credential",
+      "result": "passed",
+      "detail": {
+        "code": "permission_denied",
+        "reason": "bad_credential",
+        "phase": "handshake",
+        "notSent": true
+      }
+    },
+    {
+      "id": "P9",
+      "title": "app core unpaired: state unpaired, every feature pairing_missing",
+      "result": "passed",
+      "detail": {
+        "state": "unpaired",
+        "principal": {
+          "clientId": "unpaired:conn_86eb098bf8ca4abf",
+          "role": "unpaired"
+        },
+        "pairing": {
+          "state": "unpaired"
+        },
+        "steps": [
+          {
+            "key": "discover",
+            "state": "done",
+            "detail": "/tmp/adt-wxpair/side.runtime.sock"
+          },
+          {
+            "key": "contract",
+            "state": "done",
+            "detail": "AgentDesktop agentdesktop.runtime/1"
+          },
+          {
+            "key": "pairing",
+            "state": "blocked",
+            "detail": "未配对：请在本应用中申请配对，并在 AgentDesktop 的确认窗口中核对配对码后用 Touch ID 批准"
+          },
+          {
+            "key": "window",
+            "state": "blocked",
+            "detail": "需要先完成配对"
+          },
+          {
+            "key": "account",
+            "state": "pending"
+          },
+          {
+            "key": "baseline",
+            "state": "pending"
+          }
+        ],
+        "missingCapabilities": [],
+        "inputGate": "closed",
+        "features": {
+          "read_list": {
+            "enabled": false,
+            "reason": "pairing_missing",
+            "detail": "未配对：在 AgentDesktop 中完成配对前，读取和外发都不可用"
+          },
+          "accept_request": {
+            "enabled": false,
+            "reason": "pairing_missing",
+            "detail": "未配对：在 AgentDesktop 中完成配对前，读取和外发都不可用"
+          },
+          "add_friend": {
+            "enabled": false,
+            "reason": "pairing_missing",
+            "detail": "未配对：在 AgentDesktop 中完成配对前，读取和外发都不可用"
+          },
+          "reply_draft": {
+            "enabled": false,
+            "reason": "pairing_missing",
+            "detail": "未配对：在 AgentDesktop 中完成配对前，读取和外发都不可用"
+          },
+          "send_message": {
+            "enabled": false,
+            "reason": "pairing_missing",
+            "detail": "未配对：在 AgentDesktop 中完成配对前，读取和外发都不可用"
+          },
+          "handback": {
+            "enabled": false,
+            "reason": "pairing_missing",
+            "detail": "未配对：在 AgentDesktop 中完成配对前，读取和外发都不可用"
+          }
+        }
+      }
+    }
+  ]
+}

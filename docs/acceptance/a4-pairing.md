@@ -66,6 +66,7 @@ Kevin 2026-10-11 裁决：#14 保持 Draft；先把契约快照同步到最新 m
   - Fake Runtime 的事件改成 runtime/1 事件目录（`PlatformRunEvent`）。
 - **CI**：此前失败的 2 个 OCR 用例（`new-friends-mixed`、T11）原因是 CI 机器上的 Vision 把截断省略号读成 `⋯`（U+22EF），本机读成 `…`（U+2026），识别模块只认后者。现在 OCR 入口和 `norm()` 把 `⋯`、`‥` 统一成 `…`，并加了不依赖 OCR 的单元测试。这是识别模块的修复，和配对无关；放在本 PR 是因为 Kevin 要求先让 #14 的 CI 变绿，main `c499b40` 上同样失败。
 - **验收脚本**：`scripts/pairing-acceptance.sh` 现在要求测试副本由包含 `7cbbdec` 的 main 构建（能从本地 agentdesktop 仓库判断时会检查，不满足就拒绝运行）。
+- **真实 Runtime 探测（无人值守）**：用 agentdesktop main `7cbbdec` 构建的测试副本（`/tmp/adt-wxpair`，独立 socket）跑 `probe`，9/9 通过，证据在 `evidence/pairing-2026-10-11/probe.json`。没有发起配对申请，屏幕上没有弹窗；跑完测试副本已退出、目录已删除。
 
 ## 硬约束是怎么落实的
 

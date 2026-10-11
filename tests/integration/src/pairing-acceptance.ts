@@ -52,7 +52,7 @@ async function probe(endpoint: string, checks: Check[]): Promise<void> {
   const p = hello.principal;
   checks.push({ id: 'P1', title: 'handshake without a credential: principal unpaired', result: p?.role === 'unpaired' && /^unpaired:conn_[0-9a-f]{16}$/.test(p.clientId) ? 'passed' : 'failed', detail: p });
   const handshakeProblems = resultProblems('runtime.handshake', hello.raw);
-  checks.push({ id: 'P2', title: 'handshake result validates against the bb02b59 snapshot', result: handshakeProblems.length ? 'failed' : 'passed', detail: handshakeProblems });
+  checks.push({ id: 'P2', title: 'handshake result validates against the contract snapshot', result: handshakeProblems.length ? 'failed' : 'passed', detail: handshakeProblems });
   const caps = await driver.capabilities();
   const methods = caps.interface.methods.map((m) => m.method);
   const needed = ['hub.pairing.start', 'hub.pairing.status', 'desktop.list', 'window.list', 'window.bind', 'session.open', 'observe', 'act', 'run.start', 'events.subscribe'];
